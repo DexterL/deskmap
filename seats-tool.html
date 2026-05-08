@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工位规划设计工具</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cell: 30px;
+  --seat-w: 90px;
+  --seat-h: 60px;
+  --panel-w: 320px;
+  --bg: #f5f5f5;
+  --panel-bg: #fff;
+  --border: #d0d0d0;
+  --text: #333;
+  --text-secondary: #666;
+  --accent: #4a90d9;
+  --danger: #e74c3c;
+  --shadow: 0 2px 8px rgba(0,0,0,0.1);
+  --radius: 6px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--border);
+  z-index: 100; position: relative;
+}
+#toolbar h1 { font-size: 16px; font-weight: 600; margin-right: auto; }
+#toolbar button {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: #fff; cursor: pointer; font-size: 13px; color: var(--text);
+  transition: all .15s;
+}
+#toolbar button:hover { background: #f0f0f0; border-color: #bbb; }
+#toolbar button.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+#toolbar button.accent:hover { opacity: .9; }
+#toolbar button.danger { color: var(--danger); border-color: var(--danger); }
+#toolbar button.danger:hover { background: var(--danger); color: #fff; }
+
+/* ── Main Layout ── */
+#main { display: flex; height: calc(100vh - 45px); }
+
+/* ── Left Panel ── */
+#left-panel {
+  width: var(--panel-w); min-width: var(--panel-w);
+  background: var(--panel-bg); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* People Section */
+#people-section {
+  flex: 1; display: flex; flex-direction: column;
+  border-bottom: 1px solid var(--border); min-height: 0;
+}
+#people-section h3, #staging-section h3 {
+  font-size: 13px; font-weight: 600; padding: 10px 12px;
+  background: #fafafa; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+#people-section h3 .count { font-weight: 400; color: var(--text-secondary); font-size: 12px; }
+#people-section h3 .clear-people-btn {
+  margin-left: auto; padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+  background: #fff; cursor: pointer; font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+}
+#people-section h3 .clear-people-btn:hover { color: var(--danger); border-color: var(--danger); background: #fff5f5; }
+
+.add-person-row {
+  display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #eee;
+}
+.add-person-row input {
+  flex: 1; padding: 5px 8px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 13px; outline: none;
+}
+.add-person-row input:focus { border-color: var(--accent); }
+.add-person-row button {
+  padding: 5px 10px; border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; white-space: nowrap;
+}
+.add-person-row button:hover { opacity: .9; }
+
+#people-list {
+  flex: 1; overflow-y: auto; padding: 6px;
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px;
+}
+
+.person-card {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: var(--radius); cursor: grab;
+  background: #fff; border: 1px solid #eee; font-size: 13px;
+  transition: box-shadow .15s, transform .15s;
+}
+.person-card:hover { box-shadow: var(--shadow); }
+.person-card:active { cursor: grabbing; }
+.person-card .color-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(0,0,0,0.1);
+}
+.person-card .name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-card .delete-person {
+  margin-left: auto; cursor: pointer; font-size: 14px; color: #ccc;
+  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; flex-shrink: 0;
+}
+.person-card .delete-person:hover { color: var(--danger); background: #fce4e4; }
+
+/* Staging Section */
+#staging-section { display: flex; flex-direction: column; max-height: 380px; overflow-y: auto; }
+.staging-group { padding: 8px 12px; }
+.staging-group h4 { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+.staging-items { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.staging-seat {
+  width: 50px; height: 34px; border: none;
+  border-radius: 3px 3px 8px 8px; cursor: grab;
+  background: #b8b8b8; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #777; font-weight: 600;
+  transition: box-shadow .15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+}
+.staging-seat:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.staging-seat:active { cursor: grabbing; }
+.staging-seat::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 38%;
+  background: #999; border-radius: 3px 3px 1px 1px;
+  border-bottom: 1px solid #888;
+}
+.staging-seat::after {
+  content: ''; position: absolute;
+  top: 40%; left: 16%; right: 16%; bottom: 10%;
+  background: #d5d5d5; border-radius: 2px 2px 6px 6px;
+}
+
+.staging-obstacle {
+  cursor: grab; border-radius: 3px;
+  background: #90a4ae; border: 2px solid #607d8b;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; font-weight: 600;
+  transition: box-shadow .15s;
+}
+.staging-obstacle:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+.staging-obstacle:active { cursor: grabbing; }
+.custom-obs-btn {
+  width: 100%; padding: 6px; font-size: 12px; cursor: pointer;
+  border: 1px dashed var(--accent); border-radius: 4px;
+  background: #fff; color: var(--accent); transition: all .15s;
+}
+.custom-obs-btn:hover { background: #f0f4ff; }
+.custom-obs-btn.active { background: var(--accent); color: #fff; border-style: solid; }
+
+/* ── Workspace ── */
+#workspace {
+  flex: 1; overflow: auto; position: relative;
+  background: #e8e8e8;
+}
+#grid-area {
+  position: relative;
+  min-width: 1800px; min-height: 1200px;
+  transition: min-width .2s, min-height .2s;
+  background-color: #f8f8f8;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: 0 0;
+}
+#grid-area.drag-over { background-color: #f0f4ff; }
+#grid-area.custom-mode { cursor: crosshair; }
+
+/* Placed Seats */
+.ws-seat {
+  position: absolute;
+  width: var(--seat-w); height: var(--seat-h);
+  background: #b8b8b8; border: none;
+  border-radius: 5px 5px 14px 14px;
+  cursor: grab; box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+  display: flex; align-items: center; justify-content: center;
+  transition: box-shadow .1s;
+}
+.ws-seat:active { cursor: grabbing; }
+.ws-seat .seat-back {
+  position: absolute; top: 0; left: 0; right: 0; height: 38%;
+  background: linear-gradient(180deg, #888 0%, #9a9a9a 100%);
+  border-radius: 5px 5px 3px 3px;
+  border-bottom: 1px solid #777;
+}
+.ws-seat .seat-cushion {
+  position: absolute; top: 40%; left: 14%; right: 14%; bottom: 12%;
+  background: linear-gradient(180deg, #ddd 0%, #c8c8c8 100%);
+  border-radius: 4px 4px 10px 10px;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.07);
+}
+.ws-seat .person-label {
+  font-size: 11px; font-weight: 600; text-align: center;
+  padding: 2px 4px; border-radius: 3px; max-width: 80px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: relative; z-index: 2;
+  transform-origin: center;
+}
+.ws-seat.highlight { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Placed Obstacles */
+.ws-obstacle {
+  position: absolute; border-radius: 4px;
+  background: #90a4ae; border: 2px solid #607d8b;
+  display: flex; align-items: center; justify-content: center;
+  cursor: default;
+}
+.ws-obstacle .obs-name {
+  font-size: 12px; color: #fff; font-weight: 600;
+  text-align: center; padding: 2px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ws-obstacle .obs-name:focus {
+  outline: 2px solid #fff; border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+}
+
+/* Drag Ghost */
+#drag-ghost {
+  position: fixed; pointer-events: none; z-index: 1000;
+  opacity: 0.85;
+  display: none;
+}
+#drag-ghost.person-ghost {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 20px;
+  font-size: 14px; font-weight: 600; color: #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+#drag-ghost.seat-ghost {
+  width: var(--seat-w); height: var(--seat-h);
+  background: #d0d0d0; border: 2px solid #666; border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+#drag-ghost.obstacle-ghost {
+  background: #90a4ae; border: 2px solid #455a64; border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+
+/* Invalid drop flash */
+@keyframes flash-red {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(231,76,60,0.15); }
+}
+.flash-red { animation: flash-red 0.4s ease; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* Empty state */
+.empty-hint {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #ccc; font-size: 28px; font-weight: 300; pointer-events: none;
+}
+
+/* Obstacle editing input */
+.obs-edit-input {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 90%; text-align: center; font-size: 12px; font-weight: 600;
+  border: 2px solid #fff; border-radius: 3px; padding: 2px 4px;
+  background: rgba(255,255,255,0.9); outline: none; z-index: 10;
+}
+
+/* Drop indicator */
+.drop-indicator {
+  position: absolute; pointer-events: none; z-index: 500;
+  border: 2px dashed var(--accent); border-radius: 5px;
+  background: rgba(74,144,217,0.08);
+}
+
+/* Batch Add Modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-content {
+  background: #fff; border-radius: 8px; padding: 20px;
+  width: 400px; max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.modal-content h3 { font-size: 15px; margin-bottom: 12px; }
+.batch-textarea {
+  width: 100%; height: 200px; padding: 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 14px; font-family: inherit; resize: vertical; outline: none;
+}
+.batch-textarea:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.modal-btn {
+  padding: 7px 18px; border: 1px solid var(--border); border-radius: 4px;
+  background: #fff; cursor: pointer; font-size: 13px;
+}
+.modal-btn:hover { background: #f5f5f5; }
+.modal-btn.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+.modal-btn.accent:hover { opacity: .9; }
+
+/* Color Picker */
+.color-picker-row {
+  display: flex; gap: 4px; padding: 6px 12px; flex-wrap: wrap;
+  border-bottom: 1px solid #eee;
+}
+.color-dot-opt {
+  width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: all .15s; flex-shrink: 0;
+}
+.color-dot-opt:hover { transform: scale(1.25); }
+.color-dot-opt.selected { border-color: #333; box-shadow: 0 0 0 1px #fff, 0 0 0 2px #333; }
+.color-dot-opt.taken { opacity: 0.25; cursor: not-allowed; }
+.color-dot-opt.taken:hover { transform: none; }
+.color-edit-popup {
+  position: fixed; z-index: 2000; background: #fff;
+  border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 8px;
+  display: flex; gap: 4px; flex-wrap: wrap; width: 132px;
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>工位规划设计工具</h1>
+  <button id="btn-export" class="accent">导出</button>
+  <button id="btn-import">导入</button>
+  <button id="btn-clear" class="danger">清空工作区</button>
+  <span style="color:#999;font-size:12px;margin-left:4px;">右键座位/障碍物可删除</span>
+</div>
+
+<div id="main">
+  <!-- Left Panel -->
+  <div id="left-panel">
+    <!-- People Section -->
+    <div id="people-section">
+      <h3>人员清单 <span class="count" id="people-count"></span> <button id="btn-clear-people" class="clear-people-btn" title="清空所有人员">清空</button></h3>
+      <div class="add-person-row">
+        <input type="text" id="new-person-name" placeholder="输入姓名，回车添加" maxlength="20">
+        <button id="btn-add-person">添加</button>
+        <button id="btn-batch-add" style="padding:5px 8px;font-size:12px;border:1px dashed var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;">批量</button>
+      </div>
+      <div class="color-picker-row" id="add-color-picker"></div>
+      <div id="people-list"></div>
+    </div>
+
+    <!-- Staging Section -->
+    <div id="staging-section">
+      <h3>待定席 — 拖入工作区</h3>
+      <div class="staging-group">
+        <h4>座位（4个朝向）</h4>
+        <div class="staging-items" id="staging-seats"></div>
+      </div>
+      <div class="staging-group">
+        <h4>障碍物</h4>
+        <div class="staging-items" id="staging-obstacles"></div>
+        <div style="padding:8px 12px 4px;">
+          <button id="btn-custom-obs" class="custom-obs-btn">＋ 自定义尺寸</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div id="workspace">
+    <div id="grid-area">
+      <div class="empty-hint">从左侧待定席拖入座位或障碍物</div>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+  <!-- No context menu, direct right-click to delete -->
+
+<!-- Drag Ghost -->
+<div id="drag-ghost"></div>
+
+<!-- Batch Add Modal -->
+<div id="batch-modal" class="modal-overlay" style="display:none">
+  <div class="modal-content">
+    <h3>批量添加人员</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">粘贴姓名清单，用逗号、中文逗号或换行分隔</p>
+    <textarea id="batch-input" class="batch-textarea" placeholder="例如：&#10;张三, 李四, 王五&#10;赵六, 钱七, 孙八"></textarea>
+    <p style="font-size:12px;color:#666;margin:8px 0 4px;">统一颜色（不选则自动分配）</p>
+    <div class="color-picker-row" id="batch-color-picker" style="border:none;padding:2px 0 8px;"></div>
+    <div class="modal-actions">
+      <button id="btn-batch-cancel" class="modal-btn">取消</button>
+      <button id="btn-batch-confirm" class="modal-btn accent">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input for import -->
+<input type="file" id="import-file" accept=".json" style="display:none">
+
+<script>
+(function() {
+  // ── Constants ──
+  const CELL = 30;
+  const SEAT_W = 3 * CELL;  // 90px
+  const SEAT_H = 2 * CELL;  // 60px
+
+  const SEAT_ORIENTATIONS = [
+    { deg: 0,   label: '上 ↑', cssDeg: 0 },
+    { deg: 90,  label: '右 →', cssDeg: 90 },
+    { deg: 180, label: '下 ↓', cssDeg: 180 },
+    { deg: 270, label: '左 ←', cssDeg: 270 },
+  ];
+
+  function getSeatSize(orientation) {
+    // For 90 and 270 degrees, the 90x60 seat is rotated, so its bounding box becomes 60x90
+    if (orientation === 90 || orientation === 270) {
+      return { w: SEAT_H, h: SEAT_W };
+    }
+    return { w: SEAT_W, h: SEAT_H };
+  }
+
+  function getObjectSize(obj) {
+    if (obj.orientation !== undefined) return getSeatSize(obj.orientation);
+    return { w: obj.w, h: obj.h };
+  }
+
+  function getObjectRect(obj) {
+    const size = getObjectSize(obj);
+    return { x: obj.x, y: obj.y, w: size.w, h: size.h };
+  }
+
+  const OBSTACLE_TEMPLATES = [
+    { w: 1, h: 1, label: '1×1' },
+    { w: 2, h: 1, label: '2×1' },
+    { w: 1, h: 2, label: '1×2' },
+    { w: 2, h: 2, label: '2×2' },
+    { w: 3, h: 1, label: '3×1' },
+    { w: 1, h: 3, label: '1×3' },
+    { w: 3, h: 3, label: '3×3' },
+  ];
+
+  const PERSON_COLORS = [
+    '#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6',
+    '#1abc9c','#e67e22','#2980b9','#27ae60','#c0392b',
+    '#8e44ad','#16a085','#d35400','#2c3c50','#f1c40f',
+    '#00bcd4','#ff5722','#795548','#607d8b','#e91e63',
+  ];
+
+  const SCHEMA_VERSION = 1;
+
+  // ── State ──
+  let state = {
+    version: SCHEMA_VERSION,
+    people: [],
+    seats: [],
+    obstacles: [],
+  };
+
+  let drag = null; // current drag state
+  let customObsMode = false; // custom obstacle sizing mode
+  let selectedAddColor = null; // chosen color for single-add (null = auto)
+  let selectedBatchColor = null; // chosen starting color for batch add
+
+  // ── DOM refs ──
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+
+  const gridArea = $('#grid-area');
+  const workspace = $('#workspace');
+  const peopleList = $('#people-list');
+  const peopleCount = $('#people-count');
+  const dragGhost = $('#drag-ghost');
+  const emptyHint = $('.empty-hint');
+  const newPersonInput = $('#new-person-name');
+
+  // ── ID generation ──
+  function genId() { return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7); }
+
+  // ── Schema validation ──
+  function validateState(data) {
+    const errors = [];
+    if (!data || typeof data !== 'object') { errors.push('数据无效'); return { valid: false, errors }; }
+
+    const version = data.version;
+    if (version !== undefined && version !== SCHEMA_VERSION) {
+      errors.push(`数据版本 v${version} 不兼容，当前版本 v${SCHEMA_VERSION}`);
+    }
+    if (!Array.isArray(data.people)) errors.push('people 必须是数组');
+    if (!Array.isArray(data.seats)) errors.push('seats 必须是数组');
+    if (!Array.isArray(data.obstacles)) errors.push('obstacles 必须是数组');
+    if (typeof data.nextColorIdx !== 'number') errors.push('nextColorIdx 必须是数字');
+
+    for (let i = 0; i < (data.people || []).length; i++) {
+      const p = data.people[i];
+      if (typeof p.id !== 'string') errors.push(`people[${i}].id 必须是字符串`);
+      if (typeof p.name !== 'string') errors.push(`people[${i}].name 必须是字符串`);
+      if (typeof p.color !== 'string') errors.push(`people[${i}].color 必须是字符串`);
+    }
+    for (let i = 0; i < (data.seats || []).length; i++) {
+      const s = data.seats[i];
+      if (typeof s.id !== 'string') errors.push(`seats[${i}].id 必须是字符串`);
+      if (typeof s.x !== 'number') errors.push(`seats[${i}].x 必须是数字`);
+      if (typeof s.y !== 'number') errors.push(`seats[${i}].y 必须是数字`);
+      if (typeof s.orientation !== 'number') errors.push(`seats[${i}].orientation 必须是数字`);
+      if (s.personId !== null && typeof s.personId !== 'string') errors.push(`seats[${i}].personId 必须是字符串或 null`);
+    }
+    for (let i = 0; i < (data.obstacles || []).length; i++) {
+      const o = data.obstacles[i];
+      if (typeof o.id !== 'string') errors.push(`obstacles[${i}].id 必须是字符串`);
+      if (typeof o.x !== 'number') errors.push(`obstacles[${i}].x 必须是数字`);
+      if (typeof o.y !== 'number') errors.push(`obstacles[${i}].y 必须是数字`);
+      if (typeof o.w !== 'number') errors.push(`obstacles[${i}].w 必须是数字`);
+      if (typeof o.h !== 'number') errors.push(`obstacles[${i}].h 必须是数字`);
+      if (typeof o.name !== 'string') errors.push(`obstacles[${i}].name 必须是字符串`);
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  // ── Persistence ──
+  const STORAGE_KEY = 'seats-tool-state';
+
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: SCHEMA_VERSION })); } catch(e) { /* quota exceeded */ }
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const result = validateState(parsed);
+        if (result.valid) {
+          state = parsed;
+          state.version = SCHEMA_VERSION;
+        }
+      }
+    } catch(e) { /* corrupted data */ }
+  }
+
+  function exportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'seat-plan-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const result = validateState(parsed);
+        if (!result.valid) {
+          alert('导入失败:\n' + result.errors.join('\n'));
+          return;
+        }
+        state = parsed;
+        state.version = SCHEMA_VERSION;
+        saveState();
+        renderAll();
+      } catch(e) {
+        alert('导入失败：文件格式不正确');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ── Collision detection ──
+  function rectsOverlap(a, b) {
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+  }
+
+  function checkCollision(x, y, w, h, excludeId) {
+    const r1 = { x, y, w, h };
+    for (const s of state.seats) {
+      if (s.id === excludeId) continue;
+      if (rectsOverlap(r1, getObjectRect(s))) return true;
+    }
+    for (const o of state.obstacles) {
+      if (o.id === excludeId) continue;
+      if (rectsOverlap(r1, getObjectRect(o))) return true;
+    }
+    return false;
+  }
+
+  function findObjectAt(gx, gy) {
+    for (const s of state.seats) {
+      const r = getObjectRect(s);
+      if (gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h) return { type: 'seat', data: s };
+    }
+    for (const o of state.obstacles) {
+      const r = getObjectRect(o);
+      if (gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h) return { type: 'obstacle', data: o };
+    }
+    return null;
+  }
+
+  function findSeatAt(gx, gy) {
+    const obj = findObjectAt(gx, gy);
+    return (obj && obj.type === 'seat') ? obj.data : null;
+  }
+
+  function getPerson(id) { return state.people.find(p => p.id === id); }
+
+  // ── Color picker ──
+  function renderColorPicker(container, selectedColor, availableColors, onSelect) {
+    container.innerHTML = '';
+    const colors = availableColors || PERSON_COLORS;
+    for (const c of colors) {
+      const dot = document.createElement('span');
+      dot.className = 'color-dot-opt' + (c === selectedColor ? ' selected' : '');
+      dot.style.background = c;
+      dot.addEventListener('click', (e) => { e.stopPropagation(); onSelect(c); });
+      container.appendChild(dot);
+    }
+  }
+
+  function getUsedColors(excludePersonId) {
+    return new Set(state.people.filter(p => p.id !== excludePersonId).map(p => p.color));
+  }
+
+  // ── Rendering ──
+  function updateEmptyHint() {
+    emptyHint.style.display = (state.seats.length === 0 && state.obstacles.length === 0) ? '' : 'none';
+  }
+
+  function updateGridSize() {
+    let maxX = 1800, maxY = 1200;
+    for (const s of state.seats) {
+      maxX = Math.max(maxX, s.x + SEAT_W + 120);
+      maxY = Math.max(maxY, s.y + SEAT_H + 120);
+    }
+    for (const o of state.obstacles) {
+      maxX = Math.max(maxX, o.x + o.w + 120);
+      maxY = Math.max(maxY, o.y + o.h + 120);
+    }
+    gridArea.style.minWidth = maxX + 'px';
+    gridArea.style.minHeight = maxY + 'px';
+  }
+
+  function updatePeopleCount() {
+    const assigned = state.seats.filter(s => s.personId).length;
+    peopleCount.textContent = `(${state.people.length}人，${assigned}人已入座)`;
+  }
+
+  function renderPeopleList() {
+    peopleList.innerHTML = '';
+    const assignedIds = new Set(state.seats.filter(s => s.personId).map(s => s.personId));
+    const unassigned = state.people.filter(p => !assignedIds.has(p.id));
+
+    if (unassigned.length === 0 && state.people.length === 0) {
+      peopleList.innerHTML = '<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">暂无人员</div>';
+    } else if (unassigned.length === 0) {
+      peopleList.innerHTML = '<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">所有人员已入座</div>';
+    }
+
+    for (const p of unassigned) {
+      const card = document.createElement('div');
+      card.className = 'person-card';
+      card.dataset.personId = p.id;
+      card.innerHTML = `
+        <span class="color-dot" style="background:${p.color};cursor:pointer;" title="点击修改颜色"></span>
+        <span class="name">${escHtml(p.name)}</span>
+        <span class="delete-person" data-action="delete-person" title="删除人员">×</span>
+      `;
+      card.addEventListener('pointerdown', onPersonPointerDown);
+      card.querySelector('.color-dot').addEventListener('click', (e) => {
+        e.stopPropagation();
+        showColorEditPopup(p.id, e.currentTarget);
+      });
+      card.querySelector('.delete-person').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deletePerson(p.id);
+      });
+      peopleList.appendChild(card);
+    }
+    updatePeopleCount();
+  }
+
+  function renderStaging() {
+    const seatsContainer = $('#staging-seats');
+    seatsContainer.innerHTML = '';
+    for (const o of SEAT_ORIENTATIONS) {
+      const el = document.createElement('div');
+      el.className = 'staging-seat';
+      el.style.transform = `rotate(${o.cssDeg}deg)`;
+      el.textContent = o.label;
+      el.dataset.stagingType = 'seat';
+      el.dataset.orientation = o.deg;
+      el.addEventListener('pointerdown', onStagingPointerDown);
+      seatsContainer.appendChild(el);
+    }
+
+    const obsContainer = $('#staging-obstacles');
+    obsContainer.innerHTML = '';
+    for (const t of OBSTACLE_TEMPLATES) {
+      const el = document.createElement('div');
+      el.className = 'staging-obstacle';
+      el.style.width = (t.w * 20) + 'px';
+      el.style.height = (t.h * 20) + 'px';
+      el.textContent = t.label;
+      el.dataset.stagingType = 'obstacle';
+      el.dataset.obsW = t.w;
+      el.dataset.obsH = t.h;
+      el.addEventListener('pointerdown', onStagingPointerDown);
+      obsContainer.appendChild(el);
+    }
+  }
+
+  function renderWorkspace() {
+    // Remove existing items
+    gridArea.querySelectorAll('.ws-seat,.ws-obstacle,.drop-indicator').forEach(el => el.remove());
+
+    for (const s of state.seats) {
+      const el = createSeatElement(s);
+      gridArea.appendChild(el);
+    }
+
+    for (const o of state.obstacles) {
+      const el = createObstacleElement(o);
+      gridArea.appendChild(el);
+    }
+
+    updateEmptyHint();
+    updatePeopleCount();
+    updateGridSize();
+  }
+
+  function createSeatElement(s) {
+    const el = document.createElement('div');
+    el.className = 'ws-seat';
+    const size = getSeatSize(s.orientation);
+    
+    // If rotated 90 or 270 deg, we need to offset the top-left to keep the visual bounding box at (s.x, s.y)
+    let renderX = s.x;
+    let renderY = s.y;
+    if (s.orientation === 90 || s.orientation === 270) {
+      const offset = (SEAT_W - SEAT_H) / 2;
+      renderX -= offset;
+      renderY += offset;
+    }
+
+    el.style.left = renderX + 'px';
+    el.style.top = renderY + 'px';
+    el.style.transform = `rotate(${s.orientation}deg)`;
+    el.dataset.seatId = s.id;
+
+    const back = document.createElement('div');
+    back.className = 'seat-back';
+    el.appendChild(back);
+
+    const cushion = document.createElement('div');
+    cushion.className = 'seat-cushion';
+    el.appendChild(cushion);
+
+    if (s.personId) {
+      const person = getPerson(s.personId);
+      if (person) {
+        const label = document.createElement('div');
+        label.className = 'person-label';
+        label.textContent = person.name;
+        label.style.background = person.color;
+        label.style.color = getContrastColor(person.color);
+        label.style.transform = 'rotate(' + (-s.orientation) + 'deg)';
+        label.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          onAssignedSeatPointerDown(e, s.id);
+        });
+        el.appendChild(label);
+      }
+    }
+
+    el.addEventListener('pointerdown', (e) => { onObjectPointerDown(e, s.id, 'seat'); });
+    el.addEventListener('contextmenu', (e) => { onObjectContextMenu(e, s.id, 'seat'); });
+    return el;
+  }
+
+  function createObstacleElement(o) {
+    const el = document.createElement('div');
+    el.className = 'ws-obstacle';
+    el.style.left = o.x + 'px';
+    el.style.top = o.y + 'px';
+    el.style.width = o.w + 'px';
+    el.style.height = o.h + 'px';
+    el.dataset.obsId = o.id;
+
+    const name = document.createElement('span');
+    name.className = 'obs-name';
+    name.textContent = o.name || '障碍物';
+    name.contentEditable = 'false';
+    el.appendChild(name);
+
+    el.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const obs = state.obstacles.find(ob => ob.id === o.id);
+      if (!obs) return;
+      const input = document.createElement('input');
+      input.className = 'obs-edit-input';
+      input.value = obs.name || '';
+      input.addEventListener('blur', () => {
+        obs.name = input.value.trim() || '障碍物';
+        input.remove();
+        saveState();
+        renderWorkspace();
+      });
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') input.blur();
+        if (ev.key === 'Escape') { input.remove(); renderWorkspace(); }
+      });
+      el.appendChild(input);
+      input.focus();
+      input.select();
+    });
+
+    el.addEventListener('pointerdown', (e) => { onObjectPointerDown(e, o.id, 'obstacle'); });
+    el.addEventListener('contextmenu', (e) => { onObjectContextMenu(e, o.id, 'obstacle'); });
+    return el;
+  }
+
+  function renderAll() {
+    renderPeopleList();
+    renderWorkspace();
+    // Staging doesn't change
+  }
+
+  // ── Drag System ──
+  function startDrag(type, data, e) {
+    const ghost = dragGhost;
+    ghost.style.display = 'block';
+
+    if (type === 'person') {
+      const person = data.person;
+      ghost.className = 'person-ghost';
+      ghost.style.background = person.color;
+      ghost.style.color = getContrastColor(person.color);
+      ghost.textContent = person.name;
+      ghost.style.width = 'auto'; ghost.style.height = 'auto';
+      ghost.style.borderRadius = '20px';
+    } else if (type === 'assigned-person') {
+      const person = data.person;
+      ghost.className = 'person-ghost';
+      ghost.style.background = person.color;
+      ghost.style.color = getContrastColor(person.color);
+      ghost.textContent = person.name;
+      ghost.style.width = 'auto'; ghost.style.height = 'auto';
+      ghost.style.borderRadius = '20px';
+    } else if (type === 'seat-template') {
+      ghost.className = 'seat-ghost';
+      ghost.style.width = SEAT_W + 'px';
+      ghost.style.height = SEAT_H + 'px';
+      ghost.style.transform = `rotate(${data.orientation}deg)`;
+      ghost.textContent = '';
+    } else if (type === 'obstacle-template') {
+      ghost.className = 'obstacle-ghost';
+      ghost.style.width = (data.w * CELL) + 'px';
+      ghost.style.height = (data.h * CELL) + 'px';
+      ghost.style.transform = '';
+      ghost.textContent = '';
+    } else if (type === 'object-move') {
+      const obj = data.obj;
+      if (data.itemType === 'seat') {
+        ghost.className = 'seat-ghost';
+        ghost.style.width = SEAT_W + 'px';
+        ghost.style.height = SEAT_H + 'px';
+        ghost.style.transform = `rotate(${obj.orientation}deg)`;
+      } else {
+        ghost.className = 'obstacle-ghost';
+        ghost.style.width = obj.w + 'px';
+        ghost.style.height = obj.h + 'px';
+        ghost.style.transform = '';
+      }
+      ghost.textContent = '';
+    }
+
+    let offsetX = 0, offsetY = 0;
+    if (type === 'seat-template') {
+      const size = getSeatSize(data.orientation);
+      offsetX = size.w / 2;
+      offsetY = size.h / 2;
+    } else if (type === 'obstacle-template') {
+      offsetX = (data.w * CELL) / 2;
+      offsetY = (data.h * CELL) / 2;
+    } else if (type === 'object-move') {
+      const rect = gridArea.getBoundingClientRect();
+      offsetX = e.clientX - rect.left + workspace.scrollLeft - data.obj.x;
+      offsetY = e.clientY - rect.top + workspace.scrollTop - data.obj.y;
+    }
+
+    drag = { type, data, ghostEl: ghost, sourceSeatId: data.sourceSeatId || null, offsetX, offsetY };
+    moveGhost(e);
+    e.preventDefault();
+  }
+
+  function moveGhost(e) {
+    if (!drag) return;
+    const ghost = drag.ghostEl;
+    const gx = e.clientX, gy = e.clientY;
+    
+    let renderX = gx - drag.offsetX;
+    let renderY = gy - drag.offsetY;
+
+    // For seats, if rotated 90/270, we need the same offset as in createSeatElement
+    if (drag.type === 'object-move' || drag.type === 'seat-template') {
+      const orientation = drag.type === 'object-move' 
+        ? (drag.data.itemType === 'seat' ? drag.data.obj.orientation : null)
+        : drag.data.orientation;
+      if (orientation === 90 || orientation === 270) {
+        const offset = (SEAT_W - SEAT_H) / 2;
+        renderX -= offset;
+        renderY += offset;
+      }
+    } else if (drag.type === 'person' || drag.type === 'assigned-person') {
+      // Person ghost should be centered on mouse
+      renderX = gx;
+      renderY = gy;
+      ghost.style.transform = 'translate(-50%, -50%)';
+    }
+
+    ghost.style.left = renderX + 'px';
+    ghost.style.top = renderY + 'px';
+
+    // Auto-scroll workspace when near edges
+    const wsRect = workspace.getBoundingClientRect();
+    const edge = 40;
+    const speed = 12;
+    if (gx > wsRect.right - edge && workspace.scrollLeft < workspace.scrollWidth - workspace.clientWidth) {
+      workspace.scrollLeft += speed;
+    } else if (gx < wsRect.left + edge && workspace.scrollLeft > 0) {
+      workspace.scrollLeft -= speed;
+    }
+    if (gy > wsRect.bottom - edge && workspace.scrollTop < workspace.scrollHeight - workspace.clientHeight) {
+      workspace.scrollTop += speed;
+    } else if (gy < wsRect.top + edge && workspace.scrollTop > 0) {
+      workspace.scrollTop -= speed;
+    }
+
+    // Highlight drop target if applicable
+    clearHighlights();
+    if (drag.type === 'person' || drag.type === 'assigned-person') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const seat = findSeatAt(gridPos.x, gridPos.y);
+      if (seat) {
+        const el = gridArea.querySelector(`[data-seat-id="${seat.id}"]`);
+        if (el) el.classList.add('highlight');
+      }
+    } else if (drag.type === 'seat-template') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const size = getSeatSize(drag.data.orientation);
+      if (isInWorkspace(e)) {
+        showDropIndicator(gridPos.x, gridPos.y, size.w, size.h,
+          !checkCollision(gridPos.x, gridPos.y, size.w, size.h, null));
+      } else {
+        hideDropIndicator();
+      }
+    } else if (drag.type === 'obstacle-template') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const ow = drag.data.w * CELL;
+      const oh = drag.data.h * CELL;
+      if (isInWorkspace(e)) {
+        showDropIndicator(gridPos.x, gridPos.y, ow, oh,
+          !checkCollision(gridPos.x, gridPos.y, ow, oh, null));
+      } else {
+        hideDropIndicator();
+      }
+    } else if (drag.type === 'custom-obstacle-create') {
+      const gridPos = clientToGrid(e);
+      const x = Math.min(drag.data.startX, gridPos.x);
+      const y = Math.min(drag.data.startY, gridPos.y);
+      const w = Math.max(Math.abs(gridPos.x - drag.data.startX), CELL);
+      const h = Math.max(Math.abs(gridPos.y - drag.data.startY), CELL);
+      if (isInWorkspace(e)) {
+        showDropIndicator(x, y, w, h,
+          !checkCollision(x, y, w, h, null));
+      } else {
+        hideDropIndicator();
+      }
+    } else if (drag.type === 'object-move') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const obj = drag.data.obj;
+      const size = getObjectSize(obj);
+      const samePos = gridPos.x === obj.x && gridPos.y === obj.y;
+      if (isInWorkspace(e)) {
+        showDropIndicator(gridPos.x, gridPos.y, size.w, size.h,
+          samePos || !checkCollision(gridPos.x, gridPos.y, size.w, size.h, obj.id));
+      } else {
+        hideDropIndicator();
+      }
+    }
+  }
+
+  function endDrag(e) {
+    if (!drag) return;
+
+    if (drag.type === 'person') {
+      const person = drag.data.person;
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const seat = findSeatAt(gridPos.x, gridPos.y);
+      if (seat && !seat.personId) {
+        // Assign person to empty seat
+        seat.personId = person.id;
+        saveState();
+        renderAll();
+      } else if (seat && seat.personId && seat.personId !== person.id) {
+        // Swap: person goes to this seat, existing person goes to... waiting list if dragged from list
+        const existingPersonId = seat.personId;
+        seat.personId = person.id;
+        if (drag.sourceSeatId) {
+          // Person was dragged from another seat - put existing person there
+          const sourceSeat = state.seats.find(s => s.id === drag.sourceSeatId);
+          if (sourceSeat) sourceSeat.personId = existingPersonId;
+        }
+        // else: person dragged from waiting list, existing person goes to waiting list (no-op since they're already unassigned)
+        saveState();
+        renderAll();
+      } else if (seat && seat.personId === person.id) {
+        // Dropped on own seat - do nothing (but they were removed, so re-add)
+        seat.personId = person.id;
+        saveState();
+        renderAll();
+      } else {
+        // Dropped outside any seat - if dragged from a seat, person stays unassigned
+        // if dragged from waiting list, person stays unassigned
+        saveState();
+        renderAll();
+      }
+    } else if (drag.type === 'assigned-person') {
+      const person = drag.data.person;
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const seat = findSeatAt(gridPos.x, gridPos.y);
+      const sourceSeatId = drag.sourceSeatId;
+
+      if (seat && seat.id === sourceSeatId) {
+        // Dropped back on own seat - re-assign
+        seat.personId = person.id;
+        saveState();
+        renderAll();
+      } else if (seat && !seat.personId) {
+        // Move to empty seat
+        seat.personId = person.id;
+        saveState();
+        renderAll();
+      } else if (seat && seat.personId) {
+        // Swap
+        const existingPersonId = seat.personId;
+        seat.personId = person.id;
+        const sourceSeat = state.seats.find(s => s.id === sourceSeatId);
+        if (sourceSeat) sourceSeat.personId = existingPersonId;
+        saveState();
+        renderAll();
+      } else {
+        // Dropped outside - person stays unassigned (already removed from seat in startDrag)
+        saveState();
+        renderAll();
+      }
+    } else if (drag.type === 'seat-template') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const size = getSeatSize(drag.data.orientation);
+      if (isInWorkspace(e)) {
+        if (!checkCollision(gridPos.x, gridPos.y, size.w, size.h, null, null)) {
+          state.seats.push({
+            id: genId(),
+            x: gridPos.x,
+            y: gridPos.y,
+            orientation: drag.data.orientation,
+            personId: null,
+          });
+          saveState();
+        } else {
+          flashWorkspace();
+        }
+      }
+      renderWorkspace();
+    } else if (drag.type === 'obstacle-template') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const ow = drag.data.w * CELL;
+      const oh = drag.data.h * CELL;
+      if (isInWorkspace(e)) {
+        if (!checkCollision(gridPos.x, gridPos.y, ow, oh, null)) {
+          state.obstacles.push({
+            id: genId(),
+            x: gridPos.x,
+            y: gridPos.y,
+            w: ow,
+            h: oh,
+            name: '障碍物 ' + (state.obstacles.length + 1),
+          });
+          saveState();
+        } else {
+          flashWorkspace();
+        }
+      }
+      renderWorkspace();
+    } else if (drag.type === 'custom-obstacle-create') {
+      const gridPos = clientToGrid(e);
+      const x = Math.min(drag.data.startX, gridPos.x);
+      const y = Math.min(drag.data.startY, gridPos.y);
+      const w = Math.max(Math.abs(gridPos.x - drag.data.startX), CELL);
+      const h = Math.max(Math.abs(gridPos.y - drag.data.startY), CELL);
+      if (isInWorkspace(e)) {
+        if (!checkCollision(x, y, w, h, null)) {
+          state.obstacles.push({
+            id: genId(), x, y, w, h,
+            name: '障碍物 ' + (state.obstacles.length + 1),
+          });
+          saveState();
+        } else {
+          flashWorkspace();
+        }
+      }
+      renderWorkspace();
+    } else if (drag.type === 'object-move') {
+      const gridPos = clientToGrid(e, drag.offsetX, drag.offsetY);
+      const obj = drag.data.obj;
+      const size = getObjectSize(obj);
+      const samePos = gridPos.x === obj.x && gridPos.y === obj.y;
+      if (isInWorkspace(e) && !samePos) {
+        if (!checkCollision(gridPos.x, gridPos.y, size.w, size.h, obj.id)) {
+          obj.x = gridPos.x;
+          obj.y = gridPos.y;
+          saveState();
+        } else {
+          flashWorkspace();
+        }
+      }
+      renderWorkspace();
+    }
+
+    cancelDrag();
+  }
+
+  function cancelDrag() {
+    dragGhost.style.display = 'none';
+    dragGhost.className = '';
+    dragGhost.textContent = '';
+    dragGhost.style.width = ''; dragGhost.style.height = '';
+    dragGhost.style.borderRadius = '';
+    dragGhost.style.background = '';
+    dragGhost.style.color = '';
+    dragGhost.style.transform = '';
+    clearHighlights();
+    hideDropIndicator();
+    drag = null;
+    renderAll();
+  }
+
+  function clearHighlights() {
+    gridArea.querySelectorAll('.ws-seat.highlight').forEach(el => el.classList.remove('highlight'));
+  }
+
+  function showDropIndicator(x, y, w, h, valid) {
+    hideDropIndicator();
+    const el = document.createElement('div');
+    el.className = 'drop-indicator';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    if (!valid) el.style.borderColor = '#e74c3c';
+    gridArea.appendChild(el);
+  }
+
+  function hideDropIndicator() {
+    const el = gridArea.querySelector('.drop-indicator');
+    if (el) el.remove();
+  }
+
+  function flashWorkspace() {
+    gridArea.classList.add('flash-red');
+    setTimeout(() => gridArea.classList.remove('flash-red'), 400);
+  }
+
+  // ── Coordinate helpers ──
+  function clientToGrid(e, offsetX = 0, offsetY = 0) {
+    const rect = gridArea.getBoundingClientRect();
+    const scrollLeft = workspace.scrollLeft;
+    const scrollTop = workspace.scrollTop;
+    const rawX = e.clientX - rect.left + scrollLeft - offsetX;
+    const rawY = e.clientY - rect.top + scrollTop - offsetY;
+    return {
+      x: Math.round(rawX / CELL) * CELL,
+      y: Math.round(rawY / CELL) * CELL,
+    };
+  }
+
+  function isInWorkspace(e) {
+    const rect = gridArea.getBoundingClientRect();
+    return e.clientX >= rect.left && e.clientX <= rect.right &&
+           e.clientY >= rect.top && e.clientY <= rect.bottom;
+  }
+
+  // ── Custom obstacle mode ──
+  function toggleCustomObsMode() {
+    customObsMode = !customObsMode;
+    const btn = document.getElementById('btn-custom-obs');
+    if (customObsMode) {
+      btn.classList.add('active');
+      gridArea.classList.add('custom-mode');
+    } else {
+      btn.classList.remove('active');
+      gridArea.classList.remove('custom-mode');
+    }
+  }
+
+  function exitCustomObsMode() {
+    if (!customObsMode) return;
+    customObsMode = false;
+    const btn = document.getElementById('btn-custom-obs');
+    btn.classList.remove('active');
+    gridArea.classList.remove('custom-mode');
+  }
+
+  // ── Event Handlers ──
+  function onPersonPointerDown(e) {
+    if (e.button !== 0) return;
+    if (e.target.dataset.action === 'delete-person') return; // don't drag when clicking delete
+    const card = e.currentTarget;
+    const personId = card.dataset.personId;
+    const person = getPerson(personId);
+    if (!person) return;
+    startDrag('person', { person, sourceSeatId: null }, e);
+  }
+
+  function onAssignedSeatPointerDown(e, seatId) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const seat = state.seats.find(s => s.id === seatId);
+    if (!seat || !seat.personId) return;
+    const person = getPerson(seat.personId);
+    if (!person) return;
+
+    // Remove person from seat temporarily
+    seat.personId = null;
+    renderWorkspace();
+
+    startDrag('assigned-person', { person, sourceSeatId: seatId }, e);
+  }
+
+  function onObjectPointerDown(e, id, itemType) {
+    if (e.button !== 0) return;
+    const obj = (itemType === 'seat') 
+      ? state.seats.find(s => s.id === id)
+      : state.obstacles.find(o => o.id === id);
+    if (!obj) return;
+    const el = e.currentTarget;
+    el.style.opacity = '0'; // Hide original while dragging
+    startDrag('object-move', { obj, itemType, el }, e);
+  }
+
+  function onStagingPointerDown(e) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const el = e.currentTarget;
+    const type = el.dataset.stagingType;
+    if (type === 'seat') {
+      const orientation = parseInt(el.dataset.orientation);
+      startDrag('seat-template', { orientation }, e);
+    } else if (type === 'obstacle') {
+      const w = parseInt(el.dataset.obsW);
+      const h = parseInt(el.dataset.obsH);
+      startDrag('obstacle-template', { w, h }, e);
+    }
+  }
+
+  function onGridPointerDown(e) {
+    if (e.button !== 0) return;
+    if (!customObsMode) return;
+    if (e.target.closest('.ws-seat, .ws-obstacle')) return;
+    e.stopPropagation();
+    const gridPos = clientToGrid(e);
+    startDrag('custom-obstacle-create', { startX: gridPos.x, startY: gridPos.y }, e);
+  }
+
+  function onObjectContextMenu(e, id, itemType) {
+    e.preventDefault();
+    if (itemType === 'seat') {
+      state.seats = state.seats.filter(s => s.id !== id);
+    } else {
+      state.obstacles = state.obstacles.filter(o => o.id !== id);
+    }
+    saveState();
+    renderAll();
+  }
+
+  // ── Color Edit Popup ──
+  let colorEditPopup = null;
+
+  function showColorEditPopup(personId, dotEl) {
+    hideColorEditPopup();
+    const person = getPerson(personId);
+    if (!person) return;
+
+    const used = getUsedColors(personId);
+    const available = PERSON_COLORS.filter(c => !used.has(c) || c === person.color);
+
+    const popup = document.createElement('div');
+    popup.className = 'color-edit-popup';
+    const rect = dotEl.getBoundingClientRect();
+    popup.style.left = rect.left + 'px';
+    popup.style.top = (rect.bottom + 4) + 'px';
+
+    for (const c of available) {
+      const dot = document.createElement('span');
+      dot.className = 'color-dot-opt' + (c === person.color ? ' selected' : '');
+      dot.style.background = c;
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        person.color = c;
+        saveState();
+        renderAll();
+        hideColorEditPopup();
+      });
+      popup.appendChild(dot);
+    }
+    document.body.appendChild(popup);
+    colorEditPopup = popup;
+  }
+
+  function hideColorEditPopup() {
+    if (colorEditPopup) { colorEditPopup.remove(); colorEditPopup = null; }
+  }
+
+  // Context menu removed
+
+  // ── Global pointer events ──
+  document.addEventListener('pointermove', (e) => {
+    if (drag) moveGhost(e);
+  });
+
+  document.addEventListener('pointerup', (e) => {
+    if (drag) endDrag(e);
+  });
+
+  // Cancel drag on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (drag) {
+        // If dragging an assigned person, re-assign them to their source seat
+        if (drag.type === 'assigned-person' && drag.sourceSeatId) {
+          const seat = state.seats.find(s => s.id === drag.sourceSeatId);
+          if (seat) seat.personId = drag.data.person.id;
+        }
+        cancelDrag();
+        renderAll();
+      }
+      if (customObsMode) exitCustomObsMode();
+    }
+  });
+
+  // Hide popups on click elsewhere
+  document.addEventListener('click', (e) => {
+    if (colorEditPopup && !colorEditPopup.contains(e.target) && !e.target.closest('.color-dot')) hideColorEditPopup();
+  });
+
+  // Prevent default drag behaviors
+  document.addEventListener('dragstart', (e) => e.preventDefault());
+
+  // ── People Management ──
+  function addPerson(name, color) {
+    if (!name.trim()) return;
+    const c = color || selectedAddColor || PERSON_COLORS[0];
+    state.people.push({ id: genId(), name: name.trim(), color: c });
+    saveState();
+    renderAll();
+  }
+
+  function deletePerson(personId) {
+    // Remove person from any seat they occupy
+    for (const s of state.seats) {
+      if (s.personId === personId) s.personId = null;
+    }
+    state.people = state.people.filter(p => p.id !== personId);
+    saveState();
+    renderAll();
+  }
+
+  function batchAddPeople(raw) {
+    const names = raw.split(/[\n,，]+/).map(s => s.trim()).filter(s => s.length > 0);
+    if (names.length === 0) return;
+    
+    const colorToUse = selectedBatchColor || PERSON_COLORS[0];
+
+    for (const name of names) {
+      state.people.push({ id: genId(), name: name, color: colorToUse });
+    }
+    saveState();
+    renderAll();
+  }
+
+  function clearAllPeople() {
+    if (!confirm('确定要清空所有人员吗？已入座的人员将被移出座位。')) return;
+    for (const s of state.seats) s.personId = null;
+    state.people = [];
+    saveState();
+    renderAll();
+  }
+
+  $('#btn-add-person').addEventListener('click', () => {
+    addPerson(newPersonInput.value);
+    newPersonInput.value = '';
+    newPersonInput.focus();
+  });
+
+  newPersonInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      addPerson(newPersonInput.value);
+      newPersonInput.value = '';
+    }
+  });
+
+  // ── Batch Add ──
+  function showBatchModal() {
+    document.getElementById('batch-modal').style.display = 'block';
+    document.getElementById('batch-input').value = '';
+    selectedBatchColor = PERSON_COLORS[0];
+    const picker = document.getElementById('batch-color-picker');
+    const handler = (c) => { selectedBatchColor = c; renderColorPicker(picker, selectedBatchColor, PERSON_COLORS, handler); };
+    renderColorPicker(picker, selectedBatchColor, PERSON_COLORS, handler);
+    setTimeout(() => document.getElementById('batch-input').focus(), 100);
+  }
+
+  function hideBatchModal() {
+    document.getElementById('batch-modal').style.display = 'none';
+  }
+
+  document.getElementById('btn-clear-people').addEventListener('click', clearAllPeople);
+  document.getElementById('btn-batch-add').addEventListener('click', showBatchModal);
+  document.getElementById('btn-batch-confirm').addEventListener('click', () => {
+    batchAddPeople(document.getElementById('batch-input').value);
+    hideBatchModal();
+  });
+  document.getElementById('btn-batch-cancel').addEventListener('click', hideBatchModal);
+  document.getElementById('batch-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) hideBatchModal();
+  });
+  document.getElementById('batch-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); hideBatchModal(); }
+  });
+
+  // ── Toolbar buttons ──
+  $('#btn-export').addEventListener('click', exportData);
+  $('#btn-import').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', (e) => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = '';
+  });
+  $('#btn-clear').addEventListener('click', () => {
+    if (confirm('确定要清空工作区吗？人员清单将保留。')) {
+      state.seats = [];
+      state.obstacles = [];
+      saveState();
+      renderAll();
+    }
+  });
+
+  // ── Helpers ──
+  function escHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function getContrastColor(hex) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) > 150 ? '#333' : '#fff';
+  }
+
+  // ── Initialize ──
+  function init() {
+    loadState();
+    renderStaging();
+    renderAll();
+    gridArea.addEventListener('pointerdown', onGridPointerDown);
+    document.getElementById('btn-custom-obs').addEventListener('click', toggleCustomObsMode);
+
+    // Add color picker
+    const addPicker = document.getElementById('add-color-picker');
+    selectedAddColor = PERSON_COLORS[0];
+    const addHandler = (c) => {
+      selectedAddColor = c;
+      renderColorPicker(addPicker, selectedAddColor, PERSON_COLORS, addHandler);
+    };
+    renderColorPicker(addPicker, selectedAddColor, PERSON_COLORS, addHandler);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
