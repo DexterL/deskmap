@@ -729,6 +729,57 @@
       flex-wrap: wrap;
       width: 132px;
     }
+
+    /* Quick Add Arrows */
+    .quick-add-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+
+    .ws-seat:hover .quick-add-container,
+    .ws-obstacle:hover .quick-add-container {
+      display: block;
+    }
+
+    .quick-arrow {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      pointer-events: auto;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      transition: transform 0.1s, background 0.1s;
+      z-index: 101;
+      border: 2px solid #fff;
+    }
+
+    .quick-arrow:hover {
+      background: #357abd;
+      z-index: 102;
+    }
+
+    .quick-arrow.up    { top: 0; left: 50%; transform: translate(-50%, -50%); }
+    .quick-arrow.right { top: 50%; right: 0; transform: translate(50%, -50%); }
+    .quick-arrow.down  { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
+    .quick-arrow.left  { top: 50%; left: 0; transform: translate(-50%, -50%); }
+
+    .quick-arrow.up:hover    { transform: translate(-50%, -50%) scale(1.2); }
+    .quick-arrow.right:hover { transform: translate(50%, -50%) scale(1.2); }
+    .quick-arrow.down:hover  { transform: translate(-50%, 50%) scale(1.2); }
+    .quick-arrow.left:hover  { transform: translate(-50%, -50%) scale(1.2); }
   </style>
 </head>
 
@@ -1186,6 +1237,8 @@
 
         el.addEventListener('pointerdown', (e) => { onObjectPointerDown(e, s.id, 'seat'); });
         el.addEventListener('contextmenu', (e) => { onObjectContextMenu(e, s.id, 'seat'); });
+        
+        addQuickAddArrows(el, s, 'seat');
         return el;
       }
 
@@ -1228,6 +1281,8 @@
 
         el.addEventListener('pointerdown', (e) => { onObjectPointerDown(e, o.id, 'obstacle'); });
         el.addEventListener('contextmenu', (e) => { onObjectContextMenu(e, o.id, 'obstacle'); });
+        
+        addQuickAddArrows(el, o, 'obstacle');
         return el;
       }
 
@@ -1235,6 +1290,86 @@
         renderPeopleList();
         renderWorkspace();
         // Staging doesn't change
+      }
+
+      // ── Quick Add Arrows Logic ──
+      function addQuickAddArrows(el, obj, itemType) {
+        const container = document.createElement('div');
+        container.className = 'quick-add-container';
+        
+        const directions = ['up', 'right', 'down', 'left'];
+        directions.forEach(dir => {
+          const arrow = document.createElement('div');
+          arrow.className = `quick-arrow ${dir}`;
+          arrow.innerHTML = dir === 'up' ? '↑' : dir === 'right' ? '→' : dir === 'down' ? '↓' : '←';
+          
+          arrow.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            quickCopyObject(obj, itemType, dir);
+          });
+          
+          container.appendChild(arrow);
+        });
+        
+        el.appendChild(container);
+        
+        el.addEventListener('mouseenter', () => {
+          const size = getObjectSize(obj);
+          // Set container size to match bounding box and counter-rotate
+          container.style.width = size.w + 'px';
+          container.style.height = size.h + 'px';
+          container.style.transform = `translate(-50%, -50%) rotate(${-obj.orientation || 0}deg)`;
+          
+          const arrows = container.querySelectorAll('.quick-arrow');
+          arrows.forEach(arrow => {
+            const dir = arrow.classList.contains('up') ? 'up' : 
+                        arrow.classList.contains('right') ? 'right' : 
+                        arrow.classList.contains('down') ? 'down' : 'left';
+            
+            let nx = obj.x, ny = obj.y;
+            if (dir === 'up') ny -= size.h;
+            else if (dir === 'down') ny += size.h;
+            else if (dir === 'left') nx -= size.w;
+            else if (dir === 'right') nx += size.w;
+            
+            if (!checkCollision(nx, ny, size.w, size.h, null)) {
+              arrow.style.display = 'flex';
+            } else {
+              arrow.style.display = 'none';
+            }
+          });
+        });
+      }
+
+      function quickCopyObject(obj, itemType, dir) {
+        const size = getObjectSize(obj);
+        let nx = obj.x, ny = obj.y;
+        if (dir === 'up') ny -= size.h;
+        else if (dir === 'down') ny += size.h;
+        else if (dir === 'left') nx -= size.w;
+        else if (dir === 'right') nx += size.w;
+
+        if (itemType === 'seat') {
+          state.seats.push({
+            id: genId(),
+            x: nx,
+            y: ny,
+            orientation: obj.orientation,
+            personId: null,
+          });
+        } else {
+          state.obstacles.push({
+            id: genId(),
+            x: nx,
+            y: ny,
+            w: obj.w,
+            h: obj.h,
+            name: obj.name,
+          });
+        }
+        saveState();
+        renderWorkspace();
       }
 
       // ── Drag System ──
