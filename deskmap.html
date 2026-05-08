@@ -2018,8 +2018,8 @@
           offsetY = (data.h * CELL) / 2;
         } else if (type === 'object-move') {
           const rect = gridArea.getBoundingClientRect();
-          offsetX = e.clientX - rect.left + workspace.scrollLeft - data.obj.x;
-          offsetY = e.clientY - rect.top + workspace.scrollTop - data.obj.y;
+          offsetX = e.clientX - rect.left - data.obj.x;
+          offsetY = e.clientY - rect.top - data.obj.y;
         }
 
         drag = { type, data, ghostEl: ghost, sourceSeatId: data.sourceSeatId || null, offsetX, offsetY };
@@ -2366,10 +2366,8 @@
       // ── Coordinate helpers ──
       function clientToGrid(e, offsetX = 0, offsetY = 0) {
         const rect = gridArea.getBoundingClientRect();
-        const scrollLeft = workspace.scrollLeft;
-        const scrollTop = workspace.scrollTop;
-        const rawX = e.clientX - rect.left + scrollLeft - offsetX;
-        const rawY = e.clientY - rect.top + scrollTop - offsetY;
+        const rawX = e.clientX - rect.left - offsetX;
+        const rawY = e.clientY - rect.top - offsetY;
         return {
           x: Math.round(rawX / CELL) * CELL,
           y: Math.round(rawY / CELL) * CELL,
@@ -2510,8 +2508,8 @@
         renderWorkspace();
         
         const rect = gridArea.getBoundingClientRect();
-        const startX = e.clientX - rect.left + workspace.scrollLeft;
-        const startY = e.clientY - rect.top + workspace.scrollTop;
+        const startX = e.clientX - rect.left;
+        const startY = e.clientY - rect.top;
         
         marquee = { startX, startY };
         selectionMarquee.style.left = startX + 'px';
@@ -2623,8 +2621,8 @@
         if (drag) moveGhost(e);
         if (marquee) {
           const rect = gridArea.getBoundingClientRect();
-          const currentX = e.clientX - rect.left + workspace.scrollLeft;
-          const currentY = e.clientY - rect.top + workspace.scrollTop;
+          const currentX = e.clientX - rect.left;
+          const currentY = e.clientY - rect.top;
           
           const x = Math.min(marquee.startX, currentX);
           const y = Math.min(marquee.startY, currentY);
