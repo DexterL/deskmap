@@ -632,6 +632,21 @@
       box-shadow: 0 0 0 2px var(--accent);
     }
 
+    .ws-seat.selected, .ws-obstacle.selected {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      z-index: 100;
+    }
+
+    #selection-marquee {
+      position: absolute;
+      border: 1px solid var(--accent);
+      background: rgba(74, 144, 217, 0.1);
+      pointer-events: none;
+      z-index: 2000;
+      display: none;
+    }
+
     /* Placed Obstacles */
     .ws-obstacle {
       position: absolute;
@@ -1216,6 +1231,7 @@
     <div id="workspace">
       <div id="custom-mode-hint">鼠标在画布上拖拽以绘制障碍物，按 Esc 退出</div>
       <div id="grid-area">
+        <div id="selection-marquee"></div>
         <div class="empty-hint">
           <div class="hint-title">开始排座规划</div>
           <ul class="hint-list">
@@ -1321,6 +1337,8 @@
       let drag = null; // current drag state
       let lastPointerEvent = null; // last known pointer event
       let customObsMode = false; // custom obstacle sizing mode
+      let selectedIds = new Set();
+      let marquee = null; // { startX, startY }
 
       // ── DOM refs ──
       const $ = (s) => document.querySelector(s);
@@ -1331,6 +1349,7 @@
       const peopleList = $('#people-list');
       const peopleCount = $('#people-count');
       const dragGhost = $('#drag-ghost');
+      const selectionMarquee = $('#selection-marquee');
       const emptyHint = $('.empty-hint');
       const newPersonInput = $('#new-person-name');
 
@@ -1470,14 +1489,15 @@
         return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
       }
 
-      function checkCollision(x, y, w, h, excludeId) {
+      function checkCollision(x, y, w, h, excludeIds) {
         const r1 = { x, y, w, h };
+        const excludes = (excludeIds instanceof Set) ? excludeIds : (Array.isArray(excludeIds) ? new Set(excludeIds) : new Set([excludeIds]));
         for (const s of state.seats) {
-          if (s.id === excludeId) continue;
+          if (excludes.has(s.id)) continue;
           if (rectsOverlap(r1, getObjectRect(s))) return true;
         }
         for (const o of state.obstacles) {
-          if (o.id === excludeId) continue;
+          if (excludes.has(o.id)) continue;
           if (rectsOverlap(r1, getObjectRect(o))) return true;
         }
         return false;
@@ -1696,11 +1716,13 @@
 
         for (const s of state.seats) {
           const el = createSeatElement(s);
+          if (selectedIds.has(s.id)) el.classList.add('selected');
           gridArea.appendChild(el);
         }
 
         for (const o of state.obstacles) {
           const el = createObstacleElement(o);
+          if (selectedIds.has(o.id)) el.classList.add('selected');
           gridArea.appendChild(el);
         }
 
@@ -1957,6 +1979,30 @@
 
       function moveGhost(e) {
         if (!drag) return;
+        if (drag.type === 'batch-move') {
+          const dx = e.clientX - drag.startMouseX;
+          const dy = e.clientY - drag.startMouseY;
+          const gridDx = Math.round(dx / CELL) * CELL;
+          const gridDy = Math.round(dy / CELL) * CELL;
+          
+          drag.items.forEach(item => {
+            const el = gridArea.querySelector(`[data-seat-id="${item.id}"], [data-obs-id="${item.id}"]`);
+            if (el) {
+              const size = getObjectSize(item.obj);
+              let renderX = item.startX + gridDx;
+              let renderY = item.startY + gridDy;
+              if (item.type === 'seat' && (item.obj.orientation === 90 || item.obj.orientation === 270)) {
+                const offset = (SEAT_W - SEAT_H) / 2;
+                renderX -= offset;
+                renderY += offset;
+              }
+              el.style.left = renderX + 'px';
+              el.style.top = renderY + 'px';
+            }
+          });
+          return;
+        }
+
         const ghost = drag.ghostEl;
         const gx = e.clientX, gy = e.clientY;
 
@@ -2054,6 +2100,40 @@
 
       function endDrag(e) {
         if (!drag) return;
+
+        if (drag.type === 'batch-move') {
+          const dx = e.clientX - drag.startMouseX;
+          const dy = e.clientY - drag.startMouseY;
+          const gridDx = Math.round(dx / CELL) * CELL;
+          const gridDy = Math.round(dy / CELL) * CELL;
+          
+          if (gridDx === 0 && gridDy === 0) {
+            cancelDrag();
+            return;
+          }
+
+          const excludes = new Set(drag.items.map(it => it.obj.id));
+          let collision = false;
+          for (const item of drag.items) {
+            const size = getObjectSize(item.obj);
+            if (checkCollision(item.startX + gridDx, item.startY + gridDy, size.w, size.h, excludes)) {
+              collision = true;
+              break;
+            }
+          }
+          
+          if (!collision) {
+            drag.items.forEach(item => {
+              item.obj.x = item.startX + gridDx;
+              item.obj.y = item.startY + gridDy;
+            });
+            saveState();
+          } else {
+            flashWorkspace();
+          }
+          cancelDrag();
+          return;
+        }
 
         if (drag.type === 'person') {
           const person = drag.data.person;
@@ -2306,13 +2386,50 @@
 
       function onObjectPointerDown(e, id, itemType) {
         if (e.button !== 0) return;
+        e.stopPropagation();
+
+        if (e.shiftKey) {
+          if (selectedIds.has(id)) selectedIds.delete(id);
+          else selectedIds.add(id);
+          renderWorkspace();
+          return;
+        }
+
+        if (!selectedIds.has(id)) {
+          selectedIds.clear();
+          selectedIds.add(id);
+          renderWorkspace();
+        }
+
         const obj = (itemType === 'seat')
           ? state.seats.find(s => s.id === id)
           : state.obstacles.find(o => o.id === id);
         if (!obj) return;
-        const el = e.currentTarget;
-        el.style.opacity = '0'; // Hide original while dragging
-        startDrag('object-move', { obj, itemType, el }, e);
+
+        if (selectedIds.size > 1) {
+          const items = [];
+          selectedIds.forEach(sid => {
+            const s = state.seats.find(x => x.id === sid);
+            if (s) items.push({ type: 'seat', obj: s, id: s.id });
+            const o = state.obstacles.find(x => x.id === sid);
+            if (o) items.push({ type: 'obstacle', obj: o, id: o.id });
+          });
+          
+          drag = { 
+            type: 'batch-move', 
+            items: items.map(it => ({ ...it, startX: it.obj.x, startY: it.obj.y })),
+            startMouseX: e.clientX,
+            startMouseY: e.clientY
+          };
+          items.forEach(it => {
+            const el = gridArea.querySelector(`[data-seat-id="${it.id}"], [data-obs-id="${it.id}"]`);
+            if (el) el.style.opacity = '0.6';
+          });
+        } else {
+          const el = e.currentTarget;
+          el.style.opacity = '0'; // Hide original while dragging
+          startDrag('object-move', { obj, itemType, el }, e);
+        }
       }
 
       function onStagingPointerDown(e) {
@@ -2332,11 +2449,26 @@
 
       function onGridPointerDown(e) {
         if (e.button !== 0) return;
-        if (!customObsMode) return;
-        if (e.target.closest('.ws-seat, .ws-obstacle')) return;
-        e.stopPropagation();
-        const gridPos = clientToGrid(e);
-        startDrag('custom-obstacle-create', { startX: gridPos.x, startY: gridPos.y }, e);
+
+        if (customObsMode) {
+          const gridPos = clientToGrid(e);
+          startDrag('custom-obstacle-create', { startX: gridPos.x, startY: gridPos.y }, e);
+          return;
+        }
+
+        selectedIds.clear();
+        renderWorkspace();
+        
+        const rect = gridArea.getBoundingClientRect();
+        const startX = e.clientX - rect.left + workspace.scrollLeft;
+        const startY = e.clientY - rect.top + workspace.scrollTop;
+        
+        marquee = { startX, startY };
+        selectionMarquee.style.left = startX + 'px';
+        selectionMarquee.style.top = startY + 'px';
+        selectionMarquee.style.width = '0px';
+        selectionMarquee.style.height = '0px';
+        selectionMarquee.style.display = 'block';
       }
 
       function onObjectContextMenu(e, id, itemType) {
@@ -2439,11 +2571,53 @@
       document.addEventListener('pointermove', (e) => {
         lastPointerEvent = e;
         if (drag) moveGhost(e);
+        if (marquee) {
+          const rect = gridArea.getBoundingClientRect();
+          const currentX = e.clientX - rect.left + workspace.scrollLeft;
+          const currentY = e.clientY - rect.top + workspace.scrollTop;
+          
+          const x = Math.min(marquee.startX, currentX);
+          const y = Math.min(marquee.startY, currentY);
+          const w = Math.abs(marquee.startX - currentX);
+          const h = Math.abs(marquee.startY - currentY);
+          
+          selectionMarquee.style.left = x + 'px';
+          selectionMarquee.style.top = y + 'px';
+          selectionMarquee.style.width = w + 'px';
+          selectionMarquee.style.height = h + 'px';
+          
+          const mRect = { x, y, w, h };
+          selectedIds.clear();
+          
+          // Efficiently update selection classes without full rerender
+          gridArea.querySelectorAll('.ws-seat, .ws-obstacle').forEach(el => {
+            const sid = el.dataset.seatId;
+            const oid = el.dataset.obsId;
+            const id = sid || oid;
+            const type = sid ? 'seat' : 'obstacle';
+            const obj = (type === 'seat') 
+              ? state.seats.find(s => s.id === id)
+              : state.obstacles.find(o => o.id === id);
+            
+            if (obj && rectsOverlap(mRect, getObjectRect(obj))) {
+              el.classList.add('selected');
+              selectedIds.add(id);
+            } else {
+              el.classList.remove('selected');
+            }
+          });
+        }
       });
 
       document.addEventListener('pointerup', (e) => {
         if (drag) endDrag(e);
+        if (marquee) {
+          marquee = null;
+          selectionMarquee.style.display = 'none';
+        }
       });
+
+
 
       // Cancel drag on Escape, Rotate on R
       document.addEventListener('keydown', (e) => {
@@ -2458,6 +2632,9 @@
             }
             cancelDrag();
             renderAll();
+          } else {
+            selectedIds.clear();
+            renderWorkspace();
           }
           if (customObsMode) exitCustomObsMode();
         } else if (e.key.toLowerCase() === 'r') {
