@@ -1,0 +1,23 @@
+# AI Tools
+.claude/
+.gemini/
+.anthropic/
+.cursor/
+CLAUDE.md
+*.log
+
+# Data / Business Exports
+seat-plan-*.json
+data-exports/
+temp-data/
+
+# OS / Dev Cache
+.DS_Store
+Thumbs.db
+node_modules/
+.npm/
+.cache/
+dist/
+build/
+.vscode/
+.idea/
