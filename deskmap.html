@@ -111,35 +111,151 @@
       overflow: hidden;
     }
 
-    /* People Section */
-    #people-section {
-      flex: 1;
+    /* ── Collapsible Panel System ── */
+    .panel-section {
       display: flex;
       flex-direction: column;
-      border-bottom: 1px solid var(--border);
       min-height: 0;
+      overflow: hidden;
+    }
+    .panel-section.people-panel {
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-section.facility-panel {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column-reverse; /* Header at bottom for downward hide */
     }
 
-    #people-section h3,
-    #staging-section h3 {
+    .panel-header {
       font-size: 13px;
       font-weight: 600;
       padding: 10px 12px;
-      background: #fafafa;
+      background: linear-gradient(180deg, #fafafa 0%, #f3f3f3 100%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .2s;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .people-panel .panel-header {
       border-bottom: 1px solid var(--border);
+    }
+    .facility-panel .panel-header {
+      border-top: 1px solid var(--border);
+    }
+    .panel-header:hover {
+      background: linear-gradient(180deg, #f0f4ff 0%, #e8ecf5 100%);
+    }
+    .panel-header .chevron {
+      font-size: 11px;
+      transition: transform .25s ease;
+      color: #999;
+      flex-shrink: 0;
+      width: 16px;
+      text-align: center;
+    }
+    .panel-header .panel-title {
+      flex: 1;
+    }
+    .panel-header .header-actions {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+
+    .panel-body {
+      overflow: hidden;
+      transition: max-height .3s cubic-bezier(0.4, 0, 0.2, 1), opacity .2s ease;
+      opacity: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .people-panel .panel-body {
+      flex: 1;
+      max-height: 2000px; /* High enough to allow flex to work */
+    }
+    .facility-panel .panel-body {
+      max-height: 1000px;
+    }
+    
+    .panel-section.collapsed {
+      flex: 0 0 auto !important;
+    }
+    .panel-section.collapsed > .panel-body {
+      max-height: 0 !important;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .people-panel.collapsed .chevron {
+      transform: rotate(-90deg);
+    }
+    .facility-panel.collapsed .chevron {
+      transform: rotate(90deg);
+    }
+
+    /* Sub-section tabs inside people panel */
+    .sub-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .sub-tab {
+      flex: 1;
+      padding: 8px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+      user-select: none;
+    }
+    .sub-tab:hover {
+      color: var(--accent);
+      background: #f8faff;
+    }
+    .sub-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+    .sub-panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .sub-panel.active {
+      display: flex;
+    }
+
+    .sub-panel-header {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 12px;
+      background: #fafafa;
+      border-bottom: 1px solid #eee;
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    #people-section h3 .count {
+    .panel-header .count {
       font-weight: 400;
       color: var(--text-secondary);
       font-size: 12px;
     }
 
-    #people-section h3 .clear-people-btn {
-      margin-left: auto;
+    .header-btn {
       padding: 2px 8px;
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -148,9 +264,14 @@
       font-size: 12px;
       color: var(--text-secondary);
       white-space: nowrap;
+      transition: all .15s;
     }
-
-    #people-section h3 .clear-people-btn:hover {
+    .header-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: #f0f4ff;
+    }
+    .header-btn.danger:hover {
       color: var(--danger);
       border-color: var(--danger);
       background: #fff5f5;
@@ -260,7 +381,6 @@
     #staging-section {
       display: flex;
       flex-direction: column;
-      max-height: 380px;
       overflow-y: auto;
     }
 
@@ -736,8 +856,8 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      max-height: 200px;
       overflow-y: auto;
+      flex: 1;
     }
 
     .group-item {
@@ -808,6 +928,46 @@
       color: var(--danger);
     }
 
+    /* Group Selection Popup (for moving people) */
+    .group-select-popup {
+      position: fixed;
+      z-index: 2050;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 140px;
+    }
+    .group-select-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .group-select-item:hover {
+      background: #f0f4ff;
+      color: var(--accent);
+    }
+    .group-select-item .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .group-select-item.active {
+      background: #eef4ff;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
     /* Quick Add Arrows */
     .quick-add-container {
       position: absolute;
@@ -874,37 +1034,67 @@
   <div id="main">
     <!-- Left Panel -->
     <div id="left-panel">
-      <!-- People Section -->
-      <div id="people-section">
-        <h3>分组管理 <button id="btn-add-group" class="clear-people-btn" style="margin-left:auto;">＋ 新增分组</button></h3>
-        <div id="group-list" class="group-list-container"></div>
-        
-        <div style="padding: 0 12px;"><hr style="border:none; border-top: 1px solid #eee; margin: 8px 0;"></div>
-
-        <h3>人员清单 <span class="count" id="people-count"></span> <button id="btn-clear-people" class="clear-people-btn"
-            title="清空所有人员">清空</button></h3>
-        <div class="add-person-row">
-          <input type="text" id="new-person-name" placeholder="输入姓名，回车添加" maxlength="20">
-          <button id="btn-add-person">添加</button>
-          <button id="btn-batch-add"
-            style="padding:5px 8px;font-size:12px;border:1px dashed var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;">批量</button>
+      <!-- 人员管理 Panel (collapses upward) -->
+      <div class="panel-section people-panel" id="people-panel">
+        <div class="panel-header" id="people-panel-header">
+          <span class="chevron">▼</span>
+          <span class="panel-title">人员管理</span>
+          <span class="count" id="people-count"></span>
         </div>
-        <div id="people-list"></div>
+        <div class="panel-body" id="people-panel-body">
+          <div class="sub-tabs">
+            <div class="sub-tab active" data-tab="groups">分组</div>
+            <div class="sub-tab" data-tab="people">人员清单</div>
+          </div>
+
+          <!-- Sub: 分组管理 -->
+          <div class="sub-panel active" id="sub-groups">
+            <div class="sub-panel-header">
+              <span style="flex:1">分组列表</span>
+              <button id="btn-add-group" class="header-btn">＋ 新增分组</button>
+            </div>
+            <div id="group-list" class="group-list-container"></div>
+          </div>
+
+          <!-- Sub: 人员清单 -->
+          <div class="sub-panel" id="sub-people">
+            <div class="sub-panel-header">
+              <span style="font-size:11px; color:#999; margin-right:4px;">分组:</span>
+              <select id="people-group-filter" style="font-size:11px; padding:1px 4px; border-radius:3px; border:1px solid #ddd; outline:none; max-width:90px; cursor:pointer;"></select>
+              <span style="flex:1"></span>
+              <button id="btn-clear-people" class="header-btn danger" title="清空所有人员">清空</button>
+            </div>
+            <div class="add-person-row">
+              <input type="text" id="new-person-name" placeholder="输入姓名，回车添加" maxlength="20">
+              <button id="btn-add-person">添加</button>
+              <button id="btn-batch-add"
+                style="padding:5px 8px;font-size:12px;border:1px dashed var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;">批量</button>
+            </div>
+            <div id="people-list"></div>
+          </div>
+        </div>
       </div>
 
-      <!-- Staging Section -->
-      <div id="staging-section">
-        <h3>设施</h3>
-        <div class="staging-group">
-          <h4>座位</h4>
-          <div class="staging-items" id="staging-seats"></div>
-        </div>
-        <div class="staging-group">
-          <h4>障碍物</h4>
-          <div class="staging-items" id="staging-obstacles"></div>
-          <div style="padding:8px 12px 4px;">
-            <button id="btn-custom-obs" class="custom-obs-btn">＋ 自定义尺寸</button>
+      <!-- 设置座位 Panel (collapses downward) -->
+      <div class="panel-section facility-panel" id="facility-panel">
+        <div class="panel-body" id="facility-panel-body">
+          <div id="staging-section">
+            <div class="staging-group">
+              <h4>座位</h4>
+              <div class="staging-items" id="staging-seats"></div>
+            </div>
+            <div class="staging-group">
+              <h4>障碍物</h4>
+              <div class="staging-items" id="staging-obstacles"></div>
+              <div style="padding:8px 12px 4px;">
+                <button id="btn-custom-obs" class="custom-obs-btn">＋ 自定义尺寸</button>
+              </div>
+            </div>
           </div>
+        </div>
+        <div class="panel-header" id="facility-panel-header">
+          <span class="chevron">▼</span>
+          <span class="panel-title">设置座位</span>
         </div>
       </div>
     </div>
@@ -1000,7 +1190,8 @@
         people: [],
         seats: [],
         obstacles: [],
-        activeGroupId: 'g_default'
+        activeGroupId: 'g_default',
+        peopleFilterGroupId: 'all'
       };
 
       let drag = null; // current drag state
@@ -1217,7 +1408,14 @@
       function renderGroupList() {
         const groupContainer = $('#group-list');
         groupContainer.innerHTML = '';
+        
+        // Also update the filter dropdown in People tab
+        const filterSelect = $('#people-group-filter');
+        const currentFilter = state.peopleFilterGroupId || 'all';
+        filterSelect.innerHTML = '<option value="all">全部显示</option>';
+        
         state.groups.forEach(g => {
+          // Render Groups tab items
           const count = state.people.filter(p => p.groupId === g.id).length;
           const el = document.createElement('div');
           el.className = 'group-item' + (state.activeGroupId === g.id ? ' active' : '');
@@ -1243,7 +1441,7 @@
             }
           });
           nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
-          nameEl.addEventListener('click', (e) => e.stopPropagation()); // prevent activation when editing name
+          nameEl.addEventListener('click', (e) => e.stopPropagation());
           
           el.querySelector('.color-dot').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1256,39 +1454,62 @@
           });
           
           groupContainer.appendChild(el);
+
+          // Add to filter dropdown
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = g.name;
+          opt.selected = (g.id === currentFilter);
+          filterSelect.appendChild(opt);
         });
       }
 
       function renderPeopleList() {
         peopleList.innerHTML = '';
         const assignedIds = new Set(state.seats.filter(s => s.personId).map(s => s.personId));
-        const unassigned = state.people.filter(p => !assignedIds.has(p.id));
+        const filterId = state.peopleFilterGroupId || 'all';
+        
+        const unassigned = state.people.filter(p => {
+          const isUnassigned = !assignedIds.has(p.id);
+          const matchesFilter = (filterId === 'all' || p.groupId === filterId);
+          return isUnassigned && matchesFilter;
+        });
 
-        if (unassigned.length === 0 && state.people.length === 0) {
-          peopleList.innerHTML = '<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">暂无人员</div>';
-        } else if (unassigned.length === 0) {
-          peopleList.innerHTML = '<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">所有人员已入座</div>';
+        if (unassigned.length === 0) {
+          const msg = state.people.length === 0 ? '暂无人员' : (filterId === 'all' ? '所有人员已入座' : '该分组下无待分配人员');
+          peopleList.innerHTML = `<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">${msg}</div>`;
         }
 
-        // Group unassigned people by group
-        state.groups.forEach(g => {
+        // Group unassigned people by group if showing all, otherwise just list them
+        const groupsToRender = filterId === 'all' ? state.groups : state.groups.filter(g => g.id === filterId);
+        
+        groupsToRender.forEach(g => {
           const groupPeople = unassigned.filter(p => p.groupId === g.id);
           if (groupPeople.length === 0) return;
           
           const section = document.createElement('div');
           section.style.width = '100%';
-          section.innerHTML = `<div style="font-size:11px; color:#999; margin: 4px 0 2px 4px;">${escHtml(g.name)}</div>`;
+          if (filterId === 'all') {
+            section.innerHTML = `<div style="font-size:11px; color:#999; margin: 4px 0 2px 4px;">${escHtml(g.name)}</div>`;
+          }
           
           groupPeople.forEach(p => {
             const card = document.createElement('div');
             card.className = 'person-card';
             card.dataset.personId = p.id;
             card.innerHTML = `
-              <span class="color-dot" style="background:${g.color}"></span>
+              <span class="color-dot" style="background:${g.color}" title="点击切换分组"></span>
               <span class="name">${escHtml(p.name)}</span>
               <span class="delete-person" data-action="delete-person" title="删除人员">×</span>
             `;
             card.addEventListener('pointerdown', onPersonPointerDown);
+            
+            // Interaction to edit person's group
+            card.querySelector('.color-dot').addEventListener('click', (e) => {
+              e.stopPropagation();
+              showMoveToGroupPopup(p.id, e.currentTarget);
+            });
+            
             card.querySelector('.delete-person').addEventListener('click', (e) => {
               e.stopPropagation();
               deletePerson(p.id);
@@ -1449,6 +1670,8 @@
         renderGroupList();
         renderPeopleList();
         renderWorkspace();
+        // Recalculate collapsible panel heights after content update
+        if (window._refreshPanelHeights) window._refreshPanelHeights();
         // Staging doesn't change
       }
 
@@ -2027,6 +2250,45 @@
         if (colorEditPopup) { colorEditPopup.remove(); colorEditPopup = null; }
       }
 
+      // ── Move to Group Popup ──
+      let groupSelectPopup = null;
+
+      function showMoveToGroupPopup(personId, dotEl) {
+        hideMoveToGroupPopup();
+        const person = getPerson(personId);
+        if (!person) return;
+
+        const popup = document.createElement('div');
+        popup.className = 'group-select-popup';
+        const rect = dotEl.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top = (rect.bottom + 4) + 'px';
+
+        state.groups.forEach(g => {
+          const item = document.createElement('div');
+          item.className = 'group-select-item' + (person.groupId === g.id ? ' active' : '');
+          item.innerHTML = `
+            <span class="color-dot" style="background:${g.color}"></span>
+            <span style="flex:1">${escHtml(g.name)}</span>
+          `;
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            person.groupId = g.id;
+            saveState();
+            renderAll();
+            hideMoveToGroupPopup();
+          });
+          popup.appendChild(item);
+        });
+
+        document.body.appendChild(popup);
+        groupSelectPopup = popup;
+      }
+
+      function hideMoveToGroupPopup() {
+        if (groupSelectPopup) { groupSelectPopup.remove(); groupSelectPopup = null; }
+      }
+
       // Context menu removed
 
       // ── Global pointer events ──
@@ -2057,6 +2319,7 @@
       // Hide popups on click elsewhere
       document.addEventListener('click', (e) => {
         if (colorEditPopup && !colorEditPopup.contains(e.target) && !e.target.closest('.color-dot')) hideColorEditPopup();
+        if (groupSelectPopup && !groupSelectPopup.contains(e.target) && !e.target.closest('.color-dot')) hideMoveToGroupPopup();
       });
 
       // Prevent default drag behaviors
@@ -2198,10 +2461,88 @@
       }
 
       // ── Initialize ──
+      function initPanels() {
+        // Panel collapse toggles
+        const peoplePanelHeader = $('#people-panel-header');
+        const facilityPanelHeader = $('#facility-panel-header');
+        const peoplePanel = $('#people-panel');
+        const facilityPanel = $('#facility-panel');
+        const peoplePanelBody = $('#people-panel-body');
+        const facilityPanelBody = $('#facility-panel-body');
+
+        function setPanelBodyMaxHeight(body) {
+          const section = body.closest('.panel-section');
+          if (!section.classList.contains('collapsed')) {
+            // For the facility panel, we set the actual scrollHeight to allow transition
+            if (section.classList.contains('facility-panel')) {
+              body.style.maxHeight = body.scrollHeight + 'px';
+            } else {
+              // For people panel (flex: 1), we just set a high enough value or let flex handle it
+              body.style.maxHeight = '2000px'; 
+            }
+          }
+        }
+
+        // Observe content changes to recalculate max-height
+        function refreshPanelHeights() {
+          requestAnimationFrame(() => {
+            setPanelBodyMaxHeight(peoplePanelBody);
+            setPanelBodyMaxHeight(facilityPanelBody);
+          });
+        }
+
+        peoplePanelHeader.addEventListener('click', (e) => {
+          if (e.target.closest('.header-btn')) return;
+          peoplePanel.classList.toggle('collapsed');
+          // No need to refresh heights if we use flex/constant high max-height for people panel
+          refreshPanelHeights();
+        });
+
+        facilityPanelHeader.addEventListener('click', (e) => {
+          if (e.target.closest('.header-btn')) return;
+          facilityPanel.classList.toggle('collapsed');
+          refreshPanelHeights();
+        });
+
+        // Sub-tab switching
+        const subTabs = document.querySelectorAll('.sub-tab');
+        subTabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            subTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+            const target = tab.dataset.tab === 'groups' ? '#sub-groups' : '#sub-people';
+            $(target).classList.add('active');
+            refreshPanelHeights();
+          });
+        });
+
+        // Group Filter Logic
+        const groupFilter = $('#people-group-filter');
+        groupFilter.addEventListener('change', () => {
+          state.peopleFilterGroupId = groupFilter.value;
+          // When filtering a specific group, make it the active group for adding new members
+          if (groupFilter.value !== 'all') {
+            state.activeGroupId = groupFilter.value;
+            renderGroupList(); // Update highlight in groups tab
+          }
+          saveState();
+          renderPeopleList();
+          refreshPanelHeights();
+        });
+
+        // Expose refreshPanelHeights for use after renders
+        window._refreshPanelHeights = refreshPanelHeights;
+
+        // Initial max-height set
+        setTimeout(refreshPanelHeights, 50);
+      }
+
       function init() {
         loadState();
         renderStaging();
         renderAll();
+        initPanels();
         gridArea.addEventListener('pointerdown', onGridPointerDown);
         document.getElementById('btn-custom-obs').addEventListener('click', toggleCustomObsMode);
       }
