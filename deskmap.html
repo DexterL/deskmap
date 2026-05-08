@@ -1319,6 +1319,7 @@
       };
 
       let drag = null; // current drag state
+      let lastPointerEvent = null; // last known pointer event
       let customObsMode = false; // custom obstacle sizing mode
 
       // ── DOM refs ──
@@ -2436,6 +2437,7 @@
 
       // ── Global pointer events ──
       document.addEventListener('pointermove', (e) => {
+        lastPointerEvent = e;
         if (drag) moveGhost(e);
       });
 
@@ -2443,8 +2445,10 @@
         if (drag) endDrag(e);
       });
 
-      // Cancel drag on Escape
+      // Cancel drag on Escape, Rotate on R
       document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+        
         if (e.key === 'Escape') {
           if (drag) {
             // If dragging an assigned person, re-assign them to their source seat
@@ -2456,6 +2460,83 @@
             renderAll();
           }
           if (customObsMode) exitCustomObsMode();
+        } else if (e.key.toLowerCase() === 'r') {
+          if (drag) {
+            let orientation = null;
+            if (drag.type === 'seat-template') {
+              drag.data.orientation = (drag.data.orientation + 90) % 360;
+              orientation = drag.data.orientation;
+            } else if (drag.type === 'object-move' && drag.itemType === 'seat') {
+              drag.data.obj.orientation = (drag.data.obj.orientation + 90) % 360;
+              orientation = drag.data.obj.orientation;
+            }
+            
+            if (orientation !== null) {
+              dragGhost.style.transform = `rotate(${orientation}deg)`;
+              const size = getSeatSize(orientation);
+              drag.offsetX = size.w / 2;
+              drag.offsetY = size.h / 2;
+              if (lastPointerEvent) moveGhost(lastPointerEvent);
+            } else if (drag.type === 'object-move' && drag.itemType === 'obstacle') {
+              const obs = drag.data.obj;
+              if (obs.w !== obs.h) {
+                const temp = obs.w; obs.w = obs.h; obs.h = temp;
+                dragGhost.style.width = obs.w + 'px';
+                dragGhost.style.height = obs.h + 'px';
+                drag.offsetX = obs.w / 2;
+                drag.offsetY = obs.h / 2;
+                if (lastPointerEvent) moveGhost(lastPointerEvent);
+              }
+            } else if (drag.type === 'obstacle-template') {
+              const obs = drag.data;
+              if (obs.w !== obs.h) {
+                const temp = obs.w; obs.w = obs.h; obs.h = temp;
+                dragGhost.style.width = (obs.w * CELL) + 'px';
+                dragGhost.style.height = (obs.h * CELL) + 'px';
+                drag.offsetX = (obs.w * CELL) / 2;
+                drag.offsetY = (obs.h * CELL) / 2;
+                if (lastPointerEvent) moveGhost(lastPointerEvent);
+              }
+            }
+          } else {
+            const hoveredSeat = document.querySelector('.ws-seat:hover');
+            if (hoveredSeat) {
+              const id = hoveredSeat.dataset.seatId;
+              const seat = state.seats.find(s => s.id === id);
+              if (seat) {
+                const oldOri = seat.orientation;
+                seat.orientation = (seat.orientation + 90) % 360;
+                const newSize = getSeatSize(seat.orientation);
+                if (checkCollision(seat.x, seat.y, newSize.w, newSize.h, seat.id)) {
+                  seat.orientation = oldOri; // revert
+                  hoveredSeat.classList.add('flash-red');
+                  setTimeout(() => hoveredSeat.classList.remove('flash-red'), 400);
+                } else {
+                  saveState();
+                  renderWorkspace();
+                }
+              }
+              return;
+            }
+            
+            const hoveredObs = document.querySelector('.ws-obstacle:hover');
+            if (hoveredObs) {
+              const id = hoveredObs.dataset.obsId;
+              const obs = state.obstacles.find(o => o.id === id);
+              if (obs && obs.w !== obs.h) {
+                if (checkCollision(obs.x, obs.y, obs.h, obs.w, obs.id)) {
+                  hoveredObs.classList.add('flash-red');
+                  setTimeout(() => hoveredObs.classList.remove('flash-red'), 400);
+                } else {
+                  const temp = obs.w;
+                  obs.w = obs.h;
+                  obs.h = temp;
+                  saveState();
+                  renderWorkspace();
+                }
+              }
+            }
+          }
         }
       });
 
