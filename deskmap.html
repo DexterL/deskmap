@@ -406,52 +406,56 @@
     }
 
     .staging-seat {
-      width: 50px;
-      height: 34px;
-      border: none;
-      border-radius: 3px 3px 8px 8px;
+      width: 54px;
+      height: 38px;
+      background: #fdfdfd;
+      border: 1.5px solid #cbd5e0;
+      border-radius: 8px;
       cursor: grab;
-      background: #b8b8b8;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 10px;
-      color: #777;
+      color: #718096;
       font-weight: 600;
-      transition: box-shadow .15s;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      transition: all .2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
     }
 
     .staging-seat:hover {
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      border-color: var(--accent);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
     }
 
     .staging-seat:active {
       cursor: grabbing;
     }
 
+    /* Backrest for staging */
     .staging-seat::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 38%;
-      background: #999;
-      border-radius: 3px 3px 1px 1px;
-      border-bottom: 1px solid #888;
+      left: 4px;
+      top: 15%;
+      width: 7px;
+      height: 70%;
+      background: #4a5568;
+      border-radius: 4px 2px 2px 4px;
     }
 
+    /* Cushion for staging */
     .staging-seat::after {
       content: '';
       position: absolute;
-      top: 40%;
-      left: 16%;
-      right: 16%;
-      bottom: 10%;
-      background: #d5d5d5;
-      border-radius: 2px 2px 6px 6px;
+      left: 13px;
+      top: 10%;
+      width: 32px;
+      height: 80%;
+      background: #edf2f7;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
     }
 
     .staging-obstacle {
@@ -527,16 +531,38 @@
       cursor: crosshair;
     }
 
+    #custom-mode-hint {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #fff;
+      padding: 8px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      z-index: 2000;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
+      animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+      from { transform: translate(-50%, -20px); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+
     /* Placed Seats */
     .ws-seat {
       position: absolute;
       width: var(--seat-w);
       height: var(--seat-h);
-      background: #b8b8b8;
+      background: transparent;
       border: none;
-      border-radius: 5px 5px 14px 14px;
       cursor: grab;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -549,39 +575,57 @@
 
     .ws-seat .seat-back {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 38%;
-      background: linear-gradient(180deg, #888 0%, #9a9a9a 100%);
-      border-radius: 5px 5px 3px 3px;
-      border-bottom: 1px solid #777;
+      left: 10px;
+      width: 12px;
+      height: 65%;
+      background: linear-gradient(180deg, #4a5568 0%, #2d3748 100%);
+      border-radius: 6px 3px 3px 6px;
+      box-shadow: 1px 0 3px rgba(0,0,0,0.15);
+      z-index: 3;
     }
 
     .ws-seat .seat-cushion {
       position: absolute;
-      top: 40%;
-      left: 14%;
-      right: 14%;
-      bottom: 12%;
-      background: linear-gradient(180deg, #ddd 0%, #c8c8c8 100%);
-      border-radius: 4px 4px 10px 10px;
-      box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.07);
+      left: 24px;
+      width: 52px;
+      height: 80%;
+      background: #ffffff;
+      border: 2px solid #cbd5e0;
+      border-radius: 10px;
+      z-index: 2;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
     }
+    
+    /* Armrests for workspace seats */
+    .ws-seat::before, .ws-seat::after {
+      content: '';
+      position: absolute;
+      left: 28px;
+      width: 28px;
+      height: 6px;
+      background: #cbd5e0;
+      border-radius: 3px;
+      z-index: 1;
+    }
+    .ws-seat::before { top: 6px; }
+    .ws-seat::after { bottom: 6px; }
 
     .ws-seat .person-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 700;
       text-align: center;
-      padding: 2px 4px;
-      border-radius: 3px;
+      padding: 4px 8px;
+      border-radius: 20px;
       max-width: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      position: relative;
-      z-index: 2;
-      transform-origin: center;
+      position: absolute;
+      left: 50px; /* Center of cushion area */
+      top: 50%;
+      z-index: 10;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      border: 2px solid #fff;
     }
 
     .ws-seat.highlight {
@@ -642,10 +686,21 @@
     #drag-ghost.seat-ghost {
       width: var(--seat-w);
       height: var(--seat-h);
-      background: #d0d0d0;
-      border: 2px solid #666;
-      border-radius: 5px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      background: rgba(255, 255, 255, 0.4);
+      border: 2px dashed #4a5568;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    
+    #drag-ghost.seat-ghost::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 15%;
+      width: 12px;
+      height: 70%;
+      background: rgba(74, 85, 104, 0.5);
+      border-radius: 6px 3px 3px 6px;
     }
 
     #drag-ghost.obstacle-ghost {
@@ -695,13 +750,68 @@
     /* Empty state */
     .empty-hint {
       position: absolute;
-      top: 50%;
+      top: 45%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: #ccc;
-      font-size: 28px;
-      font-weight: 300;
+      color: #aaa;
+      text-align: center;
       pointer-events: none;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      transition: opacity 0.3s;
+    }
+
+    .empty-hint .hint-title {
+      font-size: 26px;
+      font-weight: 600;
+      color: #bbb;
+      letter-spacing: 1px;
+    }
+
+    .empty-hint .hint-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      text-align: left;
+      padding: 0;
+    }
+
+    .empty-hint .hint-list li {
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #999;
+    }
+
+    .empty-hint .hint-list li b {
+      color: #777;
+      font-weight: 600;
+    }
+
+    .empty-hint .hint-list li::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      opacity: 0.6;
+    }
+
+    .empty-hint .shortcut {
+      background: #f0f0f0;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      color: #888;
+      border: 1px solid #ddd;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+      margin: 0 2px;
     }
 
     /* Obstacle editing input */
@@ -1032,7 +1142,6 @@
     <button id="btn-export" class="accent">导出</button>
     <button id="btn-import">导入</button>
     <button id="btn-clear" class="danger">清空工作区</button>
-    <span style="color:#999;font-size:12px;margin-left:4px;">右键座位/障碍物可删除</span>
   </div>
 
   <div id="main">
@@ -1105,8 +1214,19 @@
 
     <!-- Workspace -->
     <div id="workspace">
+      <div id="custom-mode-hint">鼠标在画布上拖拽以绘制障碍物，按 Esc 退出</div>
       <div id="grid-area">
-        <div class="empty-hint">从左侧待定席拖入座位或障碍物</div>
+        <div class="empty-hint">
+          <div class="hint-title">开始排座规划</div>
+          <ul class="hint-list">
+            <li>从左侧下方<b>「设置座位」</b>拖入工位或障碍物</li>
+            <li>将左侧<b>「人员管理」</b>的人员拖拽至工位排座</li>
+            <li><b>右键点击</b>画布上的元素可直接删除</li>
+            <li><b>双击</b>障碍物可重命名，回车键确认</li>
+            <li>使用<b>「自定义尺寸」</b>可绘制任意大小障碍物</li>
+            <li>按 <span class="shortcut">Esc</span> 键可取消拖拽或退出绘制模式</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -1624,7 +1744,7 @@
             label.textContent = person.name;
             label.style.background = group.color;
             label.style.color = getContrastColor(group.color);
-            label.style.transform = 'rotate(' + (-s.orientation) + 'deg)';
+            label.style.transform = `translate(-50%, -50%) rotate(${-s.orientation}deg)`;
             label.addEventListener('pointerdown', (e) => {
               e.stopPropagation();
               onAssignedSeatPointerDown(e, s.id);
@@ -2135,12 +2255,15 @@
       function toggleCustomObsMode() {
         customObsMode = !customObsMode;
         const btn = document.getElementById('btn-custom-obs');
+        const hint = document.getElementById('custom-mode-hint');
         if (customObsMode) {
           btn.classList.add('active');
           gridArea.classList.add('custom-mode');
+          hint.style.display = 'flex';
         } else {
           btn.classList.remove('active');
           gridArea.classList.remove('custom-mode');
+          hint.style.display = 'none';
         }
       }
 
@@ -2148,8 +2271,10 @@
         if (!customObsMode) return;
         customObsMode = false;
         const btn = document.getElementById('btn-custom-obs');
+        const hint = document.getElementById('custom-mode-hint');
         btn.classList.remove('active');
         gridArea.classList.remove('custom-mode');
+        hint.style.display = 'none';
       }
 
       // ── Event Handlers ──
