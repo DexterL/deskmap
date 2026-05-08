@@ -3,7 +3,6 @@
 .gemini/
 .anthropic/
 .cursor/
-CLAUDE.md
 *.log
 
 # Data / Business Exports
