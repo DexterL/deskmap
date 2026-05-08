@@ -180,16 +180,15 @@
     }
     .people-panel .panel-body {
       flex: 1;
-      max-height: 100vh; /* Allow it to take up to full height but flex will constrain it */
+      max-height: 800px; 
     }
     .facility-panel .panel-body {
-      max-height: 60vh; /* Don't let facility panel take too much space */
+      max-height: 500px; /* Use a fixed max-height for stable CSS transitions */
       overflow-y: auto;
+      border-top: 1px solid #eee;
+      transition: max-height .3s cubic-bezier(0.4, 0, 0.2, 1), opacity .2s ease;
     }
     
-    .panel-section.collapsed {
-      flex: 0 0 auto !important;
-    }
     .panel-section.collapsed > .panel-body {
       max-height: 0 !important;
       opacity: 0;
@@ -198,8 +197,11 @@
     .people-panel.collapsed .chevron {
       transform: rotate(-90deg);
     }
+    .facility-panel .chevron {
+      transform: rotate(-180deg); /* Points UP when expanded (Body is above) */
+    }
     .facility-panel.collapsed .chevron {
-      transform: rotate(90deg);
+      transform: rotate(0deg); /* Points DOWN when collapsed */
     }
 
     /* Sub-section tabs inside people panel */
@@ -2500,16 +2502,10 @@
 
         function setPanelBodyMaxHeight(body) {
           const section = body.closest('.panel-section');
-          if (!section.classList.contains('collapsed')) {
-            if (section.classList.contains('facility-panel')) {
-              // Facility panel is content-driven but capped
-              const targetH = Math.min(body.scrollHeight, window.innerHeight * 0.6);
-              body.style.maxHeight = targetH + 'px';
-            } else {
-              // People panel is flex-driven, just needs a large enough value for transition
-              body.style.maxHeight = '100vh'; 
-            }
+          if (section.classList.contains('people-panel')) {
+            body.style.maxHeight = '800px'; 
           }
+          // Facility panel is now purely CSS-driven for expansion
         }
 
         // Observe content changes to recalculate max-height
