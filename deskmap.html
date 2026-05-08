@@ -798,6 +798,43 @@
 
     .empty-hint .hint-list li {
       font-size: 15px;
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Toast Notification */
+    #toast-container {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: rgba(50, 50, 50, 0.85);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      backdrop-filter: blur(4px);
+      animation: toast-in-out 2.5s ease forwards;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @keyframes toast-in-out {
+      0% { transform: translateY(-20px); opacity: 0; }
+      15% { transform: translateY(0); opacity: 1; }
+      85% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-20px); opacity: 0; }
+    }
       display: flex;
       align-items: center;
       gap: 10px;
@@ -1271,6 +1308,9 @@
   <!-- Hidden file input for import -->
   <input type="file" id="import-file" accept=".json" style="display:none">
 
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
   <script>
     (function () {
       // ── Constants ──
@@ -1301,6 +1341,15 @@
       function getObjectRect(obj) {
         const size = getObjectSize(obj);
         return { x: obj.x, y: obj.y, w: size.w, h: size.h };
+      }
+
+      function showToast(message) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `<span style="font-size:16px">⚠️</span> ${message}`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
       }
 
       const OBSTACLE_TEMPLATES = [
@@ -2642,10 +2691,10 @@
           if (drag) {
             let orientation = null;
             if (drag.type === 'seat-template') {
-              drag.data.orientation = (drag.data.orientation + 90) % 360;
+              drag.data.orientation = (drag.data.orientation + 270) % 360; // CCW 90 = +270
               orientation = drag.data.orientation;
             } else if (drag.type === 'object-move' && drag.itemType === 'seat') {
-              drag.data.obj.orientation = (drag.data.obj.orientation + 90) % 360;
+              drag.data.obj.orientation = (drag.data.obj.orientation + 270) % 360;
               orientation = drag.data.obj.orientation;
             }
             
@@ -2677,42 +2726,84 @@
               }
             }
           } else {
-            const hoveredSeat = document.querySelector('.ws-seat:hover');
-            if (hoveredSeat) {
-              const id = hoveredSeat.dataset.seatId;
-              const seat = state.seats.find(s => s.id === id);
-              if (seat) {
-                const oldOri = seat.orientation;
-                seat.orientation = (seat.orientation + 90) % 360;
-                const newSize = getSeatSize(seat.orientation);
-                if (checkCollision(seat.x, seat.y, newSize.w, newSize.h, seat.id)) {
-                  seat.orientation = oldOri; // revert
-                  hoveredSeat.classList.add('flash-red');
-                  setTimeout(() => hoveredSeat.classList.remove('flash-red'), 400);
-                } else {
-                  saveState();
-                  renderWorkspace();
+            // Handle Selection Batch Rotation or Single Hovered Object
+            const targets = [];
+            if (selectedIds.size > 0) {
+              selectedIds.forEach(id => {
+                const s = state.seats.find(x => x.id === id);
+                if (s) targets.push({ type: 'seat', obj: s });
+                const o = state.obstacles.find(x => x.id === id);
+                if (o) targets.push({ type: 'obstacle', obj: o });
+              });
+            } else {
+              const hoveredSeat = document.querySelector('.ws-seat:hover');
+              if (hoveredSeat) {
+                const s = state.seats.find(x => x.id === hoveredSeat.dataset.seatId);
+                if (s) targets.push({ type: 'seat', obj: s, el: hoveredSeat });
+              } else {
+                const hoveredObs = document.querySelector('.ws-obstacle:hover');
+                if (hoveredObs) {
+                  const o = state.obstacles.find(x => x.id === hoveredObs.dataset.obsId);
+                  if (o) targets.push({ type: 'obstacle', obj: o, el: hoveredObs });
                 }
               }
-              return;
             }
-            
-            const hoveredObs = document.querySelector('.ws-obstacle:hover');
-            if (hoveredObs) {
-              const id = hoveredObs.dataset.obsId;
-              const obs = state.obstacles.find(o => o.id === id);
-              if (obs && obs.w !== obs.h) {
-                if (checkCollision(obs.x, obs.y, obs.h, obs.w, obs.id)) {
-                  hoveredObs.classList.add('flash-red');
-                  setTimeout(() => hoveredObs.classList.remove('flash-red'), 400);
+
+            if (targets.length === 0) return;
+
+            let bestAngleIndex = -1; // 1: 90deg, 2: 180deg, 3: 270deg (all CCW)
+            const backupStates = targets.map(t => ({ ...t.obj }));
+
+            // Try 90, 180, 270 degrees CCW
+            for (let i = 1; i <= 3; i++) {
+              let possible = true;
+              for (const t of targets) {
+                if (t.type === 'seat') {
+                  const nextOri = (backupStates.find(b => b.id === t.obj.id).orientation + (360 - 90 * i)) % 360;
+                  const size = getSeatSize(nextOri);
+                  if (checkCollision(t.obj.x, t.obj.y, size.w, size.h, selectedIds.size > 0 ? selectedIds : t.obj.id)) {
+                    possible = false;
+                    break;
+                  }
                 } else {
-                  const temp = obs.w;
-                  obs.w = obs.h;
-                  obs.h = temp;
-                  saveState();
-                  renderWorkspace();
+                  // Obstacle swap
+                  const isSwap = (i % 2 === 1);
+                  const nextW = isSwap ? backupStates.find(b => b.id === t.obj.id).h : backupStates.find(b => b.id === t.obj.id).w;
+                  const nextH = isSwap ? backupStates.find(b => b.id === t.obj.id).w : backupStates.find(b => b.id === t.obj.id).h;
+                  if (checkCollision(t.obj.x, t.obj.y, nextW, nextH, selectedIds.size > 0 ? selectedIds : t.obj.id)) {
+                    possible = false;
+                    break;
+                  }
                 }
               }
+              if (possible) {
+                bestAngleIndex = i;
+                break;
+              }
+            }
+
+            if (bestAngleIndex !== -1) {
+              targets.forEach(t => {
+                const backup = backupStates.find(b => b.id === t.obj.id);
+                if (t.type === 'seat') {
+                  t.obj.orientation = (backup.orientation + (360 - 90 * bestAngleIndex)) % 360;
+                } else {
+                  const isSwap = (bestAngleIndex % 2 === 1);
+                  t.obj.w = isSwap ? backup.h : backup.w;
+                  t.obj.h = isSwap ? backup.w : backup.h;
+                }
+              });
+              saveState();
+              renderWorkspace();
+            } else {
+              showToast("无法翻转：位置冲突");
+              targets.forEach(t => {
+                const el = t.el || (t.type === 'seat' ? document.querySelector(`.ws-seat[data-seat-id="${t.obj.id}"]`) : document.querySelector(`.ws-obstacle[data-obs-id="${t.obj.id}"]`));
+                if (el) {
+                  el.classList.add('flash-red');
+                  setTimeout(() => el.classList.remove('flash-red'), 400);
+                }
+              });
             }
           }
         }
