@@ -730,6 +730,84 @@
       width: 132px;
     }
 
+    /* Group Management */
+    .group-list-container {
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .group-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      background: #f9f9f9;
+      border: 1px solid #eee;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .group-item:hover {
+      background: #f0f0f0;
+      border-color: #ddd;
+    }
+
+    .group-item.active {
+      background: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .group-item .color-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      cursor: pointer;
+      border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .group-item .group-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      outline: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid transparent;
+    }
+
+    .group-item.active .group-name {
+      color: var(--accent);
+    }
+
+    .group-item .group-name:focus {
+      border-bottom-color: var(--accent);
+    }
+
+    .group-item .member-count {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .group-item .delete-group {
+      font-size: 16px;
+      color: #ccc;
+      margin-left: 4px;
+      cursor: pointer;
+    }
+
+    .group-item .delete-group:hover {
+      color: var(--danger);
+    }
+
     /* Quick Add Arrows */
     .quick-add-container {
       position: absolute;
@@ -798,6 +876,11 @@
     <div id="left-panel">
       <!-- People Section -->
       <div id="people-section">
+        <h3>分组管理 <button id="btn-add-group" class="clear-people-btn" style="margin-left:auto;">＋ 新增分组</button></h3>
+        <div id="group-list" class="group-list-container"></div>
+        
+        <div style="padding: 0 12px;"><hr style="border:none; border-top: 1px solid #eee; margin: 8px 0;"></div>
+
         <h3>人员清单 <span class="count" id="people-count"></span> <button id="btn-clear-people" class="clear-people-btn"
             title="清空所有人员">清空</button></h3>
         <div class="add-person-row">
@@ -806,7 +889,6 @@
           <button id="btn-batch-add"
             style="padding:5px 8px;font-size:12px;border:1px dashed var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;">批量</button>
         </div>
-        <div class="color-picker-row" id="add-color-picker"></div>
         <div id="people-list"></div>
       </div>
 
@@ -847,8 +929,7 @@
       <h3>批量添加人员</h3>
       <p style="font-size:13px;color:#666;margin-bottom:8px;">粘贴姓名清单，用逗号、中文逗号或换行分隔</p>
       <textarea id="batch-input" class="batch-textarea" placeholder="例如：&#10;张三, 李四, 王五&#10;赵六, 钱七, 孙八"></textarea>
-      <p style="font-size:12px;color:#666;margin:8px 0 4px;">统一颜色（不选则自动分配）</p>
-      <div class="color-picker-row" id="batch-color-picker" style="border:none;padding:2px 0 8px;"></div>
+      <p style="font-size:12px;color:#666;margin:8px 0 4px;">人员将被加入当前选中的分组中。</p>
       <div class="modal-actions">
         <button id="btn-batch-cancel" class="modal-btn">取消</button>
         <button id="btn-batch-confirm" class="modal-btn accent">确认添加</button>
@@ -908,20 +989,22 @@
         '#00bcd4', '#ff5722', '#795548', '#607d8b', '#e91e63',
       ];
 
-      const SCHEMA_VERSION = 1;
+      const SCHEMA_VERSION = 2;
 
       // ── State ──
       let state = {
         version: SCHEMA_VERSION,
+        groups: [
+          { id: 'g_default', name: '默认分组', color: '#3498db' }
+        ],
         people: [],
         seats: [],
         obstacles: [],
+        activeGroupId: 'g_default'
       };
 
       let drag = null; // current drag state
       let customObsMode = false; // custom obstacle sizing mode
-      let selectedAddColor = null; // chosen color for single-add (null = auto)
-      let selectedBatchColor = null; // chosen starting color for batch add
 
       // ── DOM refs ──
       const $ = (s) => document.querySelector(s);
@@ -944,19 +1027,24 @@
         if (!data || typeof data !== 'object') { errors.push('数据无效'); return { valid: false, errors }; }
 
         const version = data.version;
-        if (version !== undefined && version !== SCHEMA_VERSION) {
+        if (version !== undefined && version > SCHEMA_VERSION) {
           errors.push(`数据版本 v${version} 不兼容，当前版本 v${SCHEMA_VERSION}`);
         }
         if (!Array.isArray(data.people)) errors.push('people 必须是数组');
         if (!Array.isArray(data.seats)) errors.push('seats 必须是数组');
         if (!Array.isArray(data.obstacles)) errors.push('obstacles 必须是数组');
-        if (typeof data.nextColorIdx !== 'number') errors.push('nextColorIdx 必须是数字');
+        
+        if (data.version === 2) {
+          if (!Array.isArray(data.groups)) errors.push('groups 必须是数组');
+          if (typeof data.activeGroupId !== 'string') errors.push('activeGroupId 必须是字符串');
+        }
 
         for (let i = 0; i < (data.people || []).length; i++) {
           const p = data.people[i];
           if (typeof p.id !== 'string') errors.push(`people[${i}].id 必须是字符串`);
           if (typeof p.name !== 'string') errors.push(`people[${i}].name 必须是字符串`);
-          if (typeof p.color !== 'string') errors.push(`people[${i}].color 必须是字符串`);
+          if (data.version === 2 && typeof p.groupId !== 'string') errors.push(`people[${i}].groupId 必须是字符串`);
+          if ((data.version === 1 || !data.version) && typeof p.color !== 'string') errors.push(`people[${i}].color 必须是字符串`);
         }
         for (let i = 0; i < (data.seats || []).length; i++) {
           const s = data.seats[i];
@@ -993,11 +1081,28 @@
             const parsed = JSON.parse(raw);
             const result = validateState(parsed);
             if (result.valid) {
+              if (parsed.version === 1 || !parsed.version) {
+                // Migrate v1 to v2
+                const colorToGroupId = {};
+                const groups = [];
+                parsed.people.forEach(p => {
+                  if (!colorToGroupId[p.color]) {
+                    const gid = 'g_' + genId();
+                    colorToGroupId[p.color] = gid;
+                    groups.push({ id: gid, name: '分组 ' + (groups.length + 1), color: p.color });
+                  }
+                  p.groupId = colorToGroupId[p.color];
+                  delete p.color;
+                });
+                parsed.groups = groups.length > 0 ? groups : [{ id: 'g_default', name: '默认分组', color: '#3498db' }];
+                parsed.activeGroupId = parsed.groups[0].id;
+                parsed.version = 2;
+                delete parsed.nextColorIdx;
+              }
               state = parsed;
-              state.version = SCHEMA_VERSION;
             }
           }
-        } catch (e) { /* corrupted data */ }
+        } catch (e) { console.error('Load state failed', e); }
       }
 
       function exportData() {
@@ -1066,6 +1171,7 @@
       }
 
       function getPerson(id) { return state.people.find(p => p.id === id); }
+      function getGroup(id) { return state.groups.find(g => g.id === id) || state.groups[0]; }
 
       // ── Color picker ──
       function renderColorPicker(container, selectedColor, availableColors, onSelect) {
@@ -1080,8 +1186,8 @@
         }
       }
 
-      function getUsedColors(excludePersonId) {
-        return new Set(state.people.filter(p => p.id !== excludePersonId).map(p => p.color));
+      function getUsedGroupColors(excludeGroupId) {
+        return new Set(state.groups.filter(g => g.id !== excludeGroupId).map(g => g.color));
       }
 
       // ── Rendering ──
@@ -1108,6 +1214,51 @@
         peopleCount.textContent = `(${state.people.length}人，${assigned}人已入座)`;
       }
 
+      function renderGroupList() {
+        const groupContainer = $('#group-list');
+        groupContainer.innerHTML = '';
+        state.groups.forEach(g => {
+          const count = state.people.filter(p => p.groupId === g.id).length;
+          const el = document.createElement('div');
+          el.className = 'group-item' + (state.activeGroupId === g.id ? ' active' : '');
+          el.innerHTML = `
+            <div class="color-dot" style="background:${g.color}"></div>
+            <div class="group-name" contenteditable="true">${escHtml(g.name)}</div>
+            <div class="member-count">${count}</div>
+            <div class="delete-group" title="删除分组">×</div>
+          `;
+          
+          el.addEventListener('click', () => {
+            state.activeGroupId = g.id;
+            renderGroupList();
+          });
+          
+          const nameEl = el.querySelector('.group-name');
+          nameEl.addEventListener('blur', () => {
+            const newName = nameEl.textContent.trim() || '未命名分组';
+            if (newName !== g.name) {
+              g.name = newName;
+              saveState();
+              renderAll();
+            }
+          });
+          nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
+          nameEl.addEventListener('click', (e) => e.stopPropagation()); // prevent activation when editing name
+          
+          el.querySelector('.color-dot').addEventListener('click', (e) => {
+            e.stopPropagation();
+            showColorEditPopup(g.id, e.currentTarget, 'group');
+          });
+          
+          el.querySelector('.delete-group').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteGroup(g.id);
+          });
+          
+          groupContainer.appendChild(el);
+        });
+      }
+
       function renderPeopleList() {
         peopleList.innerHTML = '';
         const assignedIds = new Set(state.seats.filter(s => s.personId).map(s => s.personId));
@@ -1119,26 +1270,33 @@
           peopleList.innerHTML = '<div style="color:#ccc;font-size:13px;padding:20px;text-align:center;">所有人员已入座</div>';
         }
 
-        for (const p of unassigned) {
-          const card = document.createElement('div');
-          card.className = 'person-card';
-          card.dataset.personId = p.id;
-          card.innerHTML = `
-        <span class="color-dot" style="background:${p.color};cursor:pointer;" title="点击修改颜色"></span>
-        <span class="name">${escHtml(p.name)}</span>
-        <span class="delete-person" data-action="delete-person" title="删除人员">×</span>
-      `;
-          card.addEventListener('pointerdown', onPersonPointerDown);
-          card.querySelector('.color-dot').addEventListener('click', (e) => {
-            e.stopPropagation();
-            showColorEditPopup(p.id, e.currentTarget);
+        // Group unassigned people by group
+        state.groups.forEach(g => {
+          const groupPeople = unassigned.filter(p => p.groupId === g.id);
+          if (groupPeople.length === 0) return;
+          
+          const section = document.createElement('div');
+          section.style.width = '100%';
+          section.innerHTML = `<div style="font-size:11px; color:#999; margin: 4px 0 2px 4px;">${escHtml(g.name)}</div>`;
+          
+          groupPeople.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'person-card';
+            card.dataset.personId = p.id;
+            card.innerHTML = `
+              <span class="color-dot" style="background:${g.color}"></span>
+              <span class="name">${escHtml(p.name)}</span>
+              <span class="delete-person" data-action="delete-person" title="删除人员">×</span>
+            `;
+            card.addEventListener('pointerdown', onPersonPointerDown);
+            card.querySelector('.delete-person').addEventListener('click', (e) => {
+              e.stopPropagation();
+              deletePerson(p.id);
+            });
+            section.appendChild(card);
           });
-          card.querySelector('.delete-person').addEventListener('click', (e) => {
-            e.stopPropagation();
-            deletePerson(p.id);
-          });
-          peopleList.appendChild(card);
-        }
+          peopleList.appendChild(section);
+        });
         updatePeopleCount();
       }
 
@@ -1221,11 +1379,12 @@
         if (s.personId) {
           const person = getPerson(s.personId);
           if (person) {
+            const group = getGroup(person.groupId);
             const label = document.createElement('div');
             label.className = 'person-label';
             label.textContent = person.name;
-            label.style.background = person.color;
-            label.style.color = getContrastColor(person.color);
+            label.style.background = group.color;
+            label.style.color = getContrastColor(group.color);
             label.style.transform = 'rotate(' + (-s.orientation) + 'deg)';
             label.addEventListener('pointerdown', (e) => {
               e.stopPropagation();
@@ -1287,6 +1446,7 @@
       }
 
       function renderAll() {
+        renderGroupList();
         renderPeopleList();
         renderWorkspace();
         // Staging doesn't change
@@ -1377,19 +1537,12 @@
         const ghost = dragGhost;
         ghost.style.display = 'block';
 
-        if (type === 'person') {
+        if (type === 'person' || type === 'assigned-person') {
           const person = data.person;
+          const group = getGroup(person.groupId);
           ghost.className = 'person-ghost';
-          ghost.style.background = person.color;
-          ghost.style.color = getContrastColor(person.color);
-          ghost.textContent = person.name;
-          ghost.style.width = 'auto'; ghost.style.height = 'auto';
-          ghost.style.borderRadius = '20px';
-        } else if (type === 'assigned-person') {
-          const person = data.person;
-          ghost.className = 'person-ghost';
-          ghost.style.background = person.color;
-          ghost.style.color = getContrastColor(person.color);
+          ghost.style.background = group.color;
+          ghost.style.color = getContrastColor(group.color);
           ghost.textContent = person.name;
           ghost.style.width = 'auto'; ghost.style.height = 'auto';
           ghost.style.borderRadius = '20px';
@@ -1833,13 +1986,19 @@
       // ── Color Edit Popup ──
       let colorEditPopup = null;
 
-      function showColorEditPopup(personId, dotEl) {
+      function showColorEditPopup(targetId, dotEl, type) {
         hideColorEditPopup();
-        const person = getPerson(personId);
-        if (!person) return;
+        let target, used;
+        if (type === 'group') {
+          target = getGroup(targetId);
+          used = getUsedGroupColors(targetId);
+        } else {
+          target = getPerson(targetId);
+          used = new Set();
+        }
+        if (!target) return;
 
-        const used = getUsedColors(personId);
-        const available = PERSON_COLORS.filter(c => !used.has(c) || c === person.color);
+        const available = PERSON_COLORS.filter(c => !used.has(c) || c === target.color);
 
         const popup = document.createElement('div');
         popup.className = 'color-edit-popup';
@@ -1849,11 +2008,11 @@
 
         for (const c of available) {
           const dot = document.createElement('span');
-          dot.className = 'color-dot-opt' + (c === person.color ? ' selected' : '');
+          dot.className = 'color-dot-opt' + (c === target.color ? ' selected' : '');
           dot.style.background = c;
           dot.addEventListener('click', (e) => {
             e.stopPropagation();
-            person.color = c;
+            target.color = c;
             saveState();
             renderAll();
             hideColorEditPopup();
@@ -1904,10 +2063,9 @@
       document.addEventListener('dragstart', (e) => e.preventDefault());
 
       // ── People Management ──
-      function addPerson(name, color) {
+      function addPerson(name) {
         if (!name.trim()) return;
-        const c = color || selectedAddColor || PERSON_COLORS[0];
-        state.people.push({ id: genId(), name: name.trim(), color: c });
+        state.people.push({ id: genId(), name: name.trim(), groupId: state.activeGroupId });
         saveState();
         renderAll();
       }
@@ -1926,11 +2084,37 @@
         const names = raw.split(/[\n,，]+/).map(s => s.trim()).filter(s => s.length > 0);
         if (names.length === 0) return;
 
-        const colorToUse = selectedBatchColor || PERSON_COLORS[0];
-
         for (const name of names) {
-          state.people.push({ id: genId(), name: name, color: colorToUse });
+          state.people.push({ id: genId(), name: name, groupId: state.activeGroupId });
         }
+        saveState();
+        renderAll();
+      }
+
+      function addGroup() {
+        const usedColors = getUsedGroupColors();
+        const color = PERSON_COLORS.find(c => !usedColors.has(c)) || PERSON_COLORS[0];
+        const gid = genId();
+        state.groups.push({ id: gid, name: '新分组', color });
+        state.activeGroupId = gid;
+        saveState();
+        renderAll();
+      }
+
+      function deleteGroup(groupId) {
+        if (state.groups.length <= 1) {
+          alert('至少需要保留一个分组');
+          return;
+        }
+        const count = state.people.filter(p => p.groupId === groupId).length;
+        if (count > 0 && !confirm(`该分组下有 ${count} 名人员，删除分组将同时删除这些人员，确定吗？`)) return;
+        
+        // Remove people
+        const peopleToRemove = state.people.filter(p => p.groupId === groupId);
+        peopleToRemove.forEach(p => deletePerson(p.id));
+        
+        state.groups = state.groups.filter(g => g.id !== groupId);
+        if (state.activeGroupId === groupId) state.activeGroupId = state.groups[0].id;
         saveState();
         renderAll();
       }
@@ -1960,10 +2144,6 @@
       function showBatchModal() {
         document.getElementById('batch-modal').style.display = 'block';
         document.getElementById('batch-input').value = '';
-        selectedBatchColor = PERSON_COLORS[0];
-        const picker = document.getElementById('batch-color-picker');
-        const handler = (c) => { selectedBatchColor = c; renderColorPicker(picker, selectedBatchColor, PERSON_COLORS, handler); };
-        renderColorPicker(picker, selectedBatchColor, PERSON_COLORS, handler);
         setTimeout(() => document.getElementById('batch-input').focus(), 100);
       }
 
@@ -1984,6 +2164,8 @@
       document.getElementById('batch-input').addEventListener('keydown', (e) => {
         if (e.key === 'Escape') { e.stopPropagation(); hideBatchModal(); }
       });
+
+      document.getElementById('btn-add-group').addEventListener('click', addGroup);
 
       // ── Toolbar buttons ──
       $('#btn-export').addEventListener('click', exportData);
@@ -2022,15 +2204,6 @@
         renderAll();
         gridArea.addEventListener('pointerdown', onGridPointerDown);
         document.getElementById('btn-custom-obs').addEventListener('click', toggleCustomObsMode);
-
-        // Add color picker
-        const addPicker = document.getElementById('add-color-picker');
-        selectedAddColor = PERSON_COLORS[0];
-        const addHandler = (c) => {
-          selectedAddColor = c;
-          renderColorPicker(addPicker, selectedAddColor, PERSON_COLORS, addHandler);
-        };
-        renderColorPicker(addPicker, selectedAddColor, PERSON_COLORS, addHandler);
       }
 
       init();
