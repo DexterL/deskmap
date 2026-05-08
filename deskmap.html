@@ -176,13 +176,15 @@
       opacity: 1;
       display: flex;
       flex-direction: column;
+      min-height: 0; /* Crucial for nested flex shrinking */
     }
     .people-panel .panel-body {
       flex: 1;
-      max-height: 2000px; /* High enough to allow flex to work */
+      max-height: 100vh; /* Allow it to take up to full height but flex will constrain it */
     }
     .facility-panel .panel-body {
-      max-height: 1000px;
+      max-height: 60vh; /* Don't let facility panel take too much space */
+      overflow-y: auto;
     }
     
     .panel-section.collapsed {
@@ -1119,7 +1121,7 @@
       <h3>批量添加人员</h3>
       <p style="font-size:13px;color:#666;margin-bottom:8px;">粘贴姓名清单，用逗号、中文逗号或换行分隔</p>
       <textarea id="batch-input" class="batch-textarea" placeholder="例如：&#10;张三, 李四, 王五&#10;赵六, 钱七, 孙八"></textarea>
-      <p style="font-size:12px;color:#666;margin:8px 0 4px;">人员将被加入当前选中的分组中。</p>
+      <p style="font-size:12px;color:var(--danger);margin:8px 0 4px;font-weight:600;">请确保已在人员清单中选择了具体的分组。</p>
       <div class="modal-actions">
         <button id="btn-batch-cancel" class="modal-btn">取消</button>
         <button id="btn-batch-confirm" class="modal-btn accent">确认添加</button>
@@ -1227,7 +1229,18 @@
         
         if (data.version === 2) {
           if (!Array.isArray(data.groups)) errors.push('groups 必须是数组');
+          else {
+            for (let i = 0; i < data.groups.length; i++) {
+              const g = data.groups[i];
+              if (typeof g.id !== 'string') errors.push(`groups[${i}].id 必须是字符串`);
+              if (typeof g.name !== 'string') errors.push(`groups[${i}].name 必须是字符串`);
+              if (typeof g.color !== 'string') errors.push(`groups[${i}].color 必须是字符串`);
+            }
+          }
           if (typeof data.activeGroupId !== 'string') errors.push('activeGroupId 必须是字符串');
+          if (data.peopleFilterGroupId !== undefined && typeof data.peopleFilterGroupId !== 'string') {
+            errors.push('peopleFilterGroupId 必须是字符串');
+          }
         }
 
         for (let i = 0; i < (data.people || []).length; i++) {
@@ -1287,9 +1300,12 @@
                 });
                 parsed.groups = groups.length > 0 ? groups : [{ id: 'g_default', name: '默认分组', color: '#3498db' }];
                 parsed.activeGroupId = parsed.groups[0].id;
+                parsed.peopleFilterGroupId = 'all';
                 parsed.version = 2;
                 delete parsed.nextColorIdx;
               }
+              // Ensure UI state defaults if missing in imported file
+              if (!parsed.peopleFilterGroupId) parsed.peopleFilterGroupId = 'all';
               state = parsed;
             }
           }
@@ -2391,6 +2407,10 @@
       }
 
       $('#btn-add-person').addEventListener('click', () => {
+        if (state.peopleFilterGroupId === 'all') {
+          alert('请先选择一个具体的分组再添加人员。');
+          return;
+        }
         addPerson(newPersonInput.value);
         newPersonInput.value = '';
         newPersonInput.focus();
@@ -2398,6 +2418,10 @@
 
       newPersonInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+          if (state.peopleFilterGroupId === 'all') {
+            alert('请先选择一个具体的分组再添加人员。');
+            return;
+          }
           addPerson(newPersonInput.value);
           newPersonInput.value = '';
         }
@@ -2405,6 +2429,10 @@
 
       // ── Batch Add ──
       function showBatchModal() {
+        if (state.peopleFilterGroupId === 'all') {
+          alert('请先在人员清单顶部的下拉框中选择一个具体的分组，再进行批量添加。');
+          return;
+        }
         document.getElementById('batch-modal').style.display = 'block';
         document.getElementById('batch-input').value = '';
         setTimeout(() => document.getElementById('batch-input').focus(), 100);
@@ -2473,12 +2501,13 @@
         function setPanelBodyMaxHeight(body) {
           const section = body.closest('.panel-section');
           if (!section.classList.contains('collapsed')) {
-            // For the facility panel, we set the actual scrollHeight to allow transition
             if (section.classList.contains('facility-panel')) {
-              body.style.maxHeight = body.scrollHeight + 'px';
+              // Facility panel is content-driven but capped
+              const targetH = Math.min(body.scrollHeight, window.innerHeight * 0.6);
+              body.style.maxHeight = targetH + 'px';
             } else {
-              // For people panel (flex: 1), we just set a high enough value or let flex handle it
-              body.style.maxHeight = '2000px'; 
+              // People panel is flex-driven, just needs a large enough value for transition
+              body.style.maxHeight = '100vh'; 
             }
           }
         }
