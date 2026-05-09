@@ -505,22 +505,32 @@
     /* ── Workspace ── */
     #workspace {
       flex: 1;
-      overflow: auto;
+      overflow: hidden; /* Disable browser scrollbars */
       position: relative;
       background: #e8e8e8;
+      cursor: default;
     }
 
     #grid-area {
-      position: relative;
-      min-width: 1800px;
-      min-height: 1200px;
-      transition: min-width .2s, min-height .2s;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      background-color: transparent;
+      will-change: transform;
+    }
+
+    #grid-background {
+      position: absolute;
+      inset: -100000px; /* Extremely large for "infinite" feel */
+      pointer-events: none;
       background-color: #f8f8f8;
       background-image:
         linear-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
       background-size: var(--cell) var(--cell);
-      background-position: 0 0;
+      z-index: 0;
     }
 
     #grid-area.drag-over {
@@ -1268,8 +1278,9 @@
     <!-- Workspace -->
     <div id="workspace">
       <div id="custom-mode-hint">鼠标在画布上拖拽以绘制障碍物，按 Esc 退出</div>
+      <div id="selection-marquee"></div>
       <div id="grid-area">
-        <div id="selection-marquee"></div>
+        <div id="grid-background"></div>
         <div class="empty-hint">
           <div class="hint-title">开始排座规划</div>
           <ul class="hint-list">
@@ -1389,6 +1400,17 @@
       let customObsMode = false; // custom obstacle sizing mode
       let selectedIds = new Set();
       let marquee = null; // { startX, startY }
+
+      // Infinite Canvas View State
+      let view = {
+        x: 0,
+        y: 0,
+        scale: 1
+      };
+
+      function updateViewTransform() {
+        gridArea.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+      }
 
       // ── DOM refs ──
       const $ = (s) => document.querySelector(s);
@@ -2017,9 +2039,13 @@
           offsetX = (data.w * CELL) / 2;
           offsetY = (data.h * CELL) / 2;
         } else if (type === 'object-move') {
-          const rect = gridArea.getBoundingClientRect();
-          offsetX = e.clientX - rect.left - data.obj.x;
-          offsetY = e.clientY - rect.top - data.obj.y;
+          const wsRect = workspace.getBoundingClientRect();
+          const vx = e.clientX - wsRect.left;
+          const vy = e.clientY - wsRect.top;
+          const wx = (vx - view.x) / view.scale;
+          const wy = (vy - view.y) / view.scale;
+          offsetX = (wx - data.obj.x) * view.scale;
+          offsetY = (wy - data.obj.y) * view.scale;
         }
 
         drag = { type, data, ghostEl: ghost, sourceSeatId: data.sourceSeatId || null, offsetX, offsetY };
@@ -2032,13 +2058,12 @@
         if (drag.type === 'batch-move') {
           const dx = e.clientX - drag.startMouseX;
           const dy = e.clientY - drag.startMouseY;
-          const gridDx = Math.round(dx / CELL) * CELL;
-          const gridDy = Math.round(dy / CELL) * CELL;
+          const gridDx = Math.round(dx / (CELL * view.scale)) * CELL;
+          const gridDy = Math.round(dy / (CELL * view.scale)) * CELL;
           
           drag.items.forEach(item => {
             const el = gridArea.querySelector(`[data-seat-id="${item.id}"], [data-obs-id="${item.id}"]`);
             if (el) {
-              const size = getObjectSize(item.obj);
               let renderX = item.startX + gridDx;
               let renderY = item.startY + gridDy;
               if (item.type === 'seat' && (item.obj.orientation === 90 || item.obj.orientation === 270)) {
@@ -2078,21 +2103,6 @@
 
         ghost.style.left = renderX + 'px';
         ghost.style.top = renderY + 'px';
-
-        // Auto-scroll workspace when near edges
-        const wsRect = workspace.getBoundingClientRect();
-        const edge = 40;
-        const speed = 12;
-        if (gx > wsRect.right - edge && workspace.scrollLeft < workspace.scrollWidth - workspace.clientWidth) {
-          workspace.scrollLeft += speed;
-        } else if (gx < wsRect.left + edge && workspace.scrollLeft > 0) {
-          workspace.scrollLeft -= speed;
-        }
-        if (gy > wsRect.bottom - edge && workspace.scrollTop < workspace.scrollHeight - workspace.clientHeight) {
-          workspace.scrollTop += speed;
-        } else if (gy < wsRect.top + edge && workspace.scrollTop > 0) {
-          workspace.scrollTop -= speed;
-        }
 
         // Highlight drop target if applicable
         clearHighlights();
@@ -2154,8 +2164,8 @@
         if (drag.type === 'batch-move') {
           const dx = e.clientX - drag.startMouseX;
           const dy = e.clientY - drag.startMouseY;
-          const gridDx = Math.round(dx / CELL) * CELL;
-          const gridDy = Math.round(dy / CELL) * CELL;
+          const gridDx = Math.round(dx / (CELL * view.scale)) * CELL;
+          const gridDy = Math.round(dy / (CELL * view.scale)) * CELL;
           
           if (gridDx === 0 && gridDy === 0) {
             cancelDrag();
@@ -2365,17 +2375,21 @@
 
       // ── Coordinate helpers ──
       function clientToGrid(e, offsetX = 0, offsetY = 0) {
-        const rect = gridArea.getBoundingClientRect();
-        const rawX = e.clientX - rect.left - offsetX;
-        const rawY = e.clientY - rect.top - offsetY;
+        const wsRect = workspace.getBoundingClientRect();
+        const vx = e.clientX - wsRect.left - offsetX;
+        const vy = e.clientY - wsRect.top - offsetY;
+        
+        const wx = (vx - view.x) / view.scale;
+        const wy = (vy - view.y) / view.scale;
+
         return {
-          x: Math.round(rawX / CELL) * CELL,
-          y: Math.round(rawY / CELL) * CELL,
+          x: Math.round(wx / CELL) * CELL,
+          y: Math.round(wy / CELL) * CELL,
         };
       }
 
       function isInWorkspace(e) {
-        const rect = gridArea.getBoundingClientRect();
+        const rect = workspace.getBoundingClientRect();
         return e.clientX >= rect.left && e.clientX <= rect.right &&
           e.clientY >= rect.top && e.clientY <= rect.bottom;
       }
@@ -2496,6 +2510,12 @@
       }
 
       function onGridPointerDown(e) {
+        if (e.button === 1 || (e.button === 0 && e.altKey)) {
+          // Pan mode
+          drag = { type: 'view-pan', startMouseX: e.clientX, startMouseY: e.clientY, startViewX: view.x, startViewY: view.y };
+          workspace.style.cursor = 'grabbing';
+          return;
+        }
         if (e.button !== 0) return;
 
         if (customObsMode) {
@@ -2507,9 +2527,9 @@
         selectedIds.clear();
         renderWorkspace();
         
-        const rect = gridArea.getBoundingClientRect();
-        const startX = e.clientX - rect.left;
-        const startY = e.clientY - rect.top;
+        const wsRect = workspace.getBoundingClientRect();
+        const startX = e.clientX - wsRect.left;
+        const startY = e.clientY - wsRect.top;
         
         marquee = { startX, startY };
         selectionMarquee.style.left = startX + 'px';
@@ -2618,11 +2638,19 @@
       // ── Global pointer events ──
       document.addEventListener('pointermove', (e) => {
         lastPointerEvent = e;
-        if (drag) moveGhost(e);
+        if (drag) {
+          if (drag.type === 'view-pan') {
+            view.x = drag.startViewX + (e.clientX - drag.startMouseX);
+            view.y = drag.startViewY + (e.clientY - drag.startMouseY);
+            updateViewTransform();
+            return;
+          }
+          moveGhost(e);
+        }
         if (marquee) {
-          const rect = gridArea.getBoundingClientRect();
-          const currentX = e.clientX - rect.left;
-          const currentY = e.clientY - rect.top;
+          const wsRect = workspace.getBoundingClientRect();
+          const currentX = e.clientX - wsRect.left;
+          const currentY = e.clientY - wsRect.top;
           
           const x = Math.min(marquee.startX, currentX);
           const y = Math.min(marquee.startY, currentY);
@@ -2634,7 +2662,13 @@
           selectionMarquee.style.width = w + 'px';
           selectionMarquee.style.height = h + 'px';
           
-          const mRect = { x, y, w, h };
+          // Convert screen space marquee to world coordinates for collision
+          const mRect = { 
+            x: (x - view.x) / view.scale, 
+            y: (y - view.y) / view.scale, 
+            w: w / view.scale, 
+            h: h / view.scale 
+          };
           selectedIds.clear();
           
           // Efficiently update selection classes without full rerender
@@ -2658,7 +2692,14 @@
       });
 
       document.addEventListener('pointerup', (e) => {
-        if (drag) endDrag(e);
+        if (drag) {
+          if (drag.type === 'view-pan') {
+            workspace.style.cursor = 'default';
+            drag = null;
+            return;
+          }
+          endDrag(e);
+        }
         if (marquee) {
           marquee = null;
           selectionMarquee.style.display = 'none';
@@ -3041,7 +3082,43 @@
         renderStaging();
         renderAll();
         initPanels();
+        
+        // Initialize view to center
+        const wsRect = workspace.getBoundingClientRect();
+        view.x = wsRect.width / 2;
+        view.y = wsRect.height / 2;
+        updateViewTransform();
+
         gridArea.addEventListener('pointerdown', onGridPointerDown);
+
+        // Infinite Canvas Zoom/Pan via Wheel
+        workspace.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          if (e.ctrlKey || e.metaKey) {
+            // Zoom
+            const delta = -e.deltaY;
+            const factor = Math.pow(1.1, delta / 100);
+            const newScale = Math.min(Math.max(view.scale * factor, 0.1), 5);
+            
+            // Zoom towards mouse position
+            const wsRect = workspace.getBoundingClientRect();
+            const mx = e.clientX - wsRect.left;
+            const my = e.clientY - wsRect.top;
+            
+            const wx = (mx - view.x) / view.scale;
+            const wy = (my - view.y) / view.scale;
+            
+            view.scale = newScale;
+            view.x = mx - wx * view.scale;
+            view.y = my - wy * view.scale;
+          } else {
+            // Pan
+            view.x -= e.deltaX;
+            view.y -= e.deltaY;
+          }
+          updateViewTransform();
+        }, { passive: false });
+
         document.getElementById('btn-custom-obs').addEventListener('click', toggleCustomObsMode);
       }
 
